@@ -115,13 +115,13 @@
         },
         {
           label: 'Zmniejsz ratę+',
-          stroke: '#7B2D9E',
+          stroke: '#EAB308',
           width: 4,
           value: (_u: uPlot, v: number) => v ? `${formatCurrency(v)} zł` : '—'
         },
         {
           label: 'Skróć okres',
-          stroke: '#A0201E',
+          stroke: '#22C55E',
           width: 2,
           dash: [6, 6],
           value: (_u: uPlot, v: number) => v ? `${formatCurrency(v)} zł` : '—'
@@ -271,7 +271,7 @@
   }
 
   .scenario-comparison__card--shorten {
-    border-left-color: #730000;
+    border-left-color: #22C55E;
   }
 
   .scenario-comparison__card--reduce {
@@ -279,7 +279,7 @@
   }
 
   .scenario-comparison__card--reduceplus {
-    border-left-color: #7B2D9E;
+    border-left-color: #EAB308;
   }
 
   .scenario-comparison__card h4 {
