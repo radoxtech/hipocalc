@@ -98,8 +98,8 @@
         },
         {
           label: 'Skróć okres',
-          stroke: '#730000', // Burgundy
-          width: 2
+          stroke: '#A0201E', // Brighter burgundy for visibility
+          width: 3
         },
         {
           label: 'Zmniejsz ratę',
