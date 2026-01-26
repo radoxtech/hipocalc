@@ -8,8 +8,9 @@
   import type { Loan, Overpayments, Schedule } from '$lib/engine/types';
   import type { GoldenMeanInput, GoldenMeanOutput } from '$lib/engine/golden-mean';
 
-  // Storage key
+  // Storage keys
   const STORAGE_KEY = 'hipocalc_form_data';
+  const THEME_STORAGE_KEY = 'hipocalc_theme';
 
   // Form state
   let principal = $state('300000');
@@ -19,6 +20,9 @@
   let monthlyOverpayment = $state('500');
   let yearlyOverpayment = $state('0');
   let yearlyMonth = $state('12');
+
+  // Theme state
+  let theme = $state<'light' | 'dark' | 'auto'>('auto');
 
   // Złoty Środek state
   let showGoldenMean = $state(false);
@@ -46,6 +50,17 @@
     } catch {
       // Ignore storage errors
     }
+
+    // Load theme preference
+    try {
+      const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+      if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'auto') {
+        theme = savedTheme;
+      }
+      applyTheme(theme);
+    } catch {
+      // Ignore storage errors
+    }
   }
 
   // Save form data to localStorage whenever values change
@@ -65,6 +80,32 @@
         emergencyStatus
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch {
+      // Ignore storage errors
+    }
+  }
+
+  // Apply theme to document
+  function applyTheme(selectedTheme: 'light' | 'dark' | 'auto') {
+    if (!browser) return;
+    const html = document.documentElement;
+    
+    if (selectedTheme === 'auto') {
+      html.removeAttribute('data-theme');
+    } else {
+      html.setAttribute('data-theme', selectedTheme);
+    }
+  }
+
+  // Toggle theme: auto -> light -> dark -> auto
+  function toggleTheme() {
+    const themes: ('light' | 'dark' | 'auto')[] = ['auto', 'light', 'dark'];
+    const currentIndex = themes.indexOf(theme);
+    const nextIndex = (currentIndex + 1) % themes.length;
+    theme = themes[nextIndex];
+    applyTheme(theme);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
     } catch {
       // Ignore storage errors
     }
@@ -184,6 +225,13 @@
     const num = typeof value === 'number' ? value : value.toNumber();
     return num.toLocaleString('pl-PL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   }
+
+  // Theme icon components (SVG)
+  const SunIcon = () => `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="3"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="10" y1="1" x2="10" y2="3"/><line x1="10" y1="17" x2="10" y2="19"/><line x1="19" y1="10" x2="17" y2="10"/><line x1="3" y1="10" x2="1" y2="10"/><line x1="16.657" y1="3.343" x2="15.243" y2="4.757"/><line x1="4.757" y1="15.243" x2="3.343" y2="16.657"/><line x1="16.657" y1="16.657" x2="15.243" y2="15.243"/><line x1="4.757" y1="4.757" x2="3.343" y2="3.343"/></g></svg>`;
+  
+  const MoonIcon = () => `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>`;
+  
+  const AutoIcon = () => `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="8" stroke="currentColor" stroke-width="2"/><path d="M10 2 A8 8 0 0 1 10 18 Z" fill="currentColor"/></svg>`;
 </script>
 
 <svelte:head>
@@ -198,6 +246,20 @@
       <h1>HipoCalc</h1>
       <p class="calculator__subtitle">Kalkulator Nadpłaty Kredytu Hipotecznego</p>
     </div>
+    <button
+      class="calculator__theme-toggle"
+      onclick={toggleTheme}
+      aria-label={`Theme: ${theme} (Click to cycle)`}
+      title={`Current: ${theme} - Click to toggle`}
+    >
+      {#if theme === 'light'}
+        {@html SunIcon()}
+      {:else if theme === 'dark'}
+        {@html MoonIcon()}
+      {:else}
+        {@html AutoIcon()}
+      {/if}
+    </button>
   </header>
 
   <main class="calculator__main">
@@ -535,7 +597,7 @@
     <p class="calculator__footer-credits">
       Dumnie stworzone przy pomocy 
       <a href="https://github.com/ohmyopencode/opencode" target="_blank" rel="noopener">Oh My OpenCode</a>
-      i modeli Anthropic Claude Opus 4 & Sonnet 4.5
+      i modeli Anthropic Claude Opus 4.5 & Sonnet 4.5
     </p>
   </footer>
 </div>
@@ -555,6 +617,7 @@
     padding: var(--space-xl) var(--space-md);
     background: linear-gradient(180deg, var(--color-parchment) 0%, var(--color-cream) 100%);
     border-bottom: 2px solid var(--color-gold);
+    position: relative;
   }
 
   .calculator__header h1 {
@@ -567,6 +630,35 @@
     font-family: var(--font-body);
     font-size: var(--text-lg);
     color: var(--color-ink-light);
+  }
+
+  .calculator__theme-toggle {
+    position: absolute;
+    right: var(--space-md);
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: transparent;
+    border: 2px solid var(--color-gold);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    color: var(--color-burgundy);
+    transition: all var(--transition-fast);
+  }
+
+  .calculator__theme-toggle:hover {
+    background: var(--color-gold);
+    color: var(--color-cream);
+  }
+
+  .calculator__theme-toggle:focus {
+    outline: none;
+    box-shadow: var(--focus-ring);
   }
 
   .calculator__main {

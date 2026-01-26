@@ -75,3 +75,27 @@
     --color-burgundy-dark: #B83D58;
   }
 }
+
+/* Manual dark mode override via data-theme attribute */
+[data-theme="dark"] {
+  --color-cream: #1A1D23;
+  --color-parchment: #22252B;
+  --color-parchment-dark: #2C2F36;
+  --color-ink: #E8EAED;
+  --color-ink-light: #9AA0A6;
+  --color-burgundy: #D4536E;
+  --color-burgundy-light: #E8738A;
+  --color-burgundy-dark: #B83D58;
+}
+
+/* Manual light mode override via data-theme attribute */
+[data-theme="light"] {
+  --color-burgundy: #8B1538;
+  --color-burgundy-light: #A8244A;
+  --color-burgundy-dark: #6B0F2A;
+  --color-cream: #FFFFFF;
+  --color-parchment: #F8F9FA;
+  --color-parchment-dark: #E9ECEF;
+  --color-ink: #212529;
+  --color-ink-light: #6C757D;
+}
