@@ -55,12 +55,12 @@
       );
       balanceReduce.push(
         i < scheduleReducePayment.rows.length
-          ? scheduleReducePayment.rows[i].balanceAfter.toNumber()
+          ? scheduleReducePayment.rows[i].balanceAfter.toNumber() + 1 // +1 zł offset for visibility when overlapping
           : null
       );
       balanceReducePlus.push(
         i < scheduleReducePlus.rows.length
-          ? scheduleReducePlus.rows[i].balanceAfter.toNumber()
+          ? scheduleReducePlus.rows[i].balanceAfter.toNumber() + 2 // +2 zł offset for visibility when overlapping
           : null
       );
     }

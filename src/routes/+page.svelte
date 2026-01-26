@@ -719,7 +719,7 @@
 
            <!-- Strategy 4: Reduce payment plus (reinvest) -->
            <div class="calculator__summary-card calculator__summary-card--reinvest">
-             <h3>Zmniejsz ratę plus</h3>
+             <h3>Zmniejsz ratę+</h3>
              <p class="calculator__strategy-hint" title="Zmniejsza ratę i reinwestuje zaoszczędzoną różnicę">
                Zmniejsza + reinwestuje 💡
              </p>
