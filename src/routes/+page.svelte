@@ -201,9 +201,7 @@
        }
      }
 
-     function pray(level: 1 | 2 | 3) {
-       const currentRate = parseFloat(rate);
-       const newRate = Math.max(0.1, currentRate - level);
+     function generateScheduleForRate(newRate: number): Schedule {
        const m = durationMode === 'years' ? Math.round(parseFloat(years) * 12) : Math.round(parseFloat(months));
        
        const loan: Loan = {
@@ -218,10 +216,24 @@
          yearly: new Decimal(yearlyOverpayment || '0'),
          yearlyMonth: parseInt(yearlyMonth) || 12
        };
+
+       if (prayerStrategy === 'reduce-plus') {
+         // For reduce-plus, we need to generate all schedules and use reinvestment logic
+         const noOverpayments: Overpayments = { monthly: new Decimal(0), yearly: new Decimal(0), yearlyMonth: 12 };
+         const newScheduleNone = generateAmortizationSchedule(loan, noOverpayments, 'none');
+         const newScheduleShortenTerm = generateAmortizationSchedule(loan, overpayments, 'shorten-term');
+         return calculateShortenTermReinvest(loan, newScheduleShortenTerm, overpayments, newScheduleNone);
+       }
        
-       const strategyMap = { 'none': 'none', 'reduce': 'reduce-payment', 'reduce-plus': 'reduce-payment', 'shorten': 'shorten-term' } as const;
-       const schedule = generateAmortizationSchedule(loan, overpayments, strategyMap[prayerStrategy] as Strategy);
+       const strategyMap = { 'none': 'none', 'reduce': 'reduce-payment', 'shorten': 'shorten-term' } as const;
+       return generateAmortizationSchedule(loan, overpayments, strategyMap[prayerStrategy] as Strategy);
+     }
+
+     function pray(level: 1 | 2 | 3) {
+       const currentRate = parseFloat(rate);
+       const newRate = Math.max(0.1, currentRate - level);
        
+       const schedule = generateScheduleForRate(newRate);
        const originalSchedule = getScheduleForStrategy(prayerStrategy);
        
        prayerResult = {
@@ -238,24 +250,8 @@
      function sin(level: 1 | 2 | 3) {
        const currentRate = parseFloat(rate);
        const newRate = currentRate + level;
-       const m = durationMode === 'years' ? Math.round(parseFloat(years) * 12) : Math.round(parseFloat(months));
        
-       const loan: Loan = {
-         principal: new Decimal(principal),
-         annualRate: new Decimal(newRate).dividedBy(100),
-         months: m,
-         type: loanType
-       };
-
-       const overpayments: Overpayments = {
-         monthly: new Decimal(monthlyOverpayment || '0'),
-         yearly: new Decimal(yearlyOverpayment || '0'),
-         yearlyMonth: parseInt(yearlyMonth) || 12
-       };
-       
-       const strategyMap = { 'none': 'none', 'reduce': 'reduce-payment', 'reduce-plus': 'reduce-payment', 'shorten': 'shorten-term' } as const;
-       const schedule = generateAmortizationSchedule(loan, overpayments, strategyMap[prayerStrategy] as Strategy);
-       
+       const schedule = generateScheduleForRate(newRate);
        const originalSchedule = getScheduleForStrategy(prayerStrategy);
        
        prayerResult = {
@@ -1071,22 +1067,22 @@
               <button 
                 class="calculator__prayer-strategy-btn"
                 class:active={prayerStrategy === 'none'}
-                onclick={() => { prayerStrategy = 'none'; prayerResult = null; }}
+                onclick={() => prayerStrategy = 'none'}
               >Bez nadpłat</button>
               <button 
                 class="calculator__prayer-strategy-btn"
                 class:active={prayerStrategy === 'reduce'}
-                onclick={() => { prayerStrategy = 'reduce'; prayerResult = null; }}
+                onclick={() => prayerStrategy = 'reduce'}
               >Zmniejsz ratę</button>
               <button 
                 class="calculator__prayer-strategy-btn"
                 class:active={prayerStrategy === 'reduce-plus'}
-                onclick={() => { prayerStrategy = 'reduce-plus'; prayerResult = null; }}
+                onclick={() => prayerStrategy = 'reduce-plus'}
               >Zmniejsz ratę+ ⭐</button>
               <button 
                 class="calculator__prayer-strategy-btn"
                 class:active={prayerStrategy === 'shorten'}
-                onclick={() => { prayerStrategy = 'shorten'; prayerResult = null; }}
+                onclick={() => prayerStrategy = 'shorten'}
               >Skróć okres</button>
             </div>
           </div>
@@ -1134,21 +1130,6 @@
                 </div>
               </div>
             </div>
-
-            <div class="calculator__prayer-buttons calculator__prayer-buttons--sin">
-              <p class="calculator__prayer-label">😈 Sprawdź co będzie gdy będziesz za dużo grzeszyć i modlitwy nie zostaną wysłuchane:</p>
-              <div class="calculator__prayer-group">
-                <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(1)}>
-                  Grzesznik<br/><small>+1% → {(parseFloat(rate) + 1).toFixed(1)}%</small>
-                </button>
-                <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(2)}>
-                  Grzesznik+<br/><small>+2% → {(parseFloat(rate) + 2).toFixed(1)}%</small>
-                </button>
-                <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(3)}>
-                  Grzesznik Premium<br/><small>+3% → {(parseFloat(rate) + 3).toFixed(1)}%</small>
-                </button>
-              </div>
-            </div>
           {/if}
 
           {#if prayerResult && prayerResult.type === 'sin'}
@@ -1179,18 +1160,20 @@
                 </div>
               </div>
             </div>
+          {/if}
 
-            <div class="calculator__prayer-buttons">
-              <p class="calculator__prayer-label">🙏 Wróć do modlitwy:</p>
+          {#if prayerResult}
+            <div class="calculator__prayer-buttons calculator__prayer-buttons--sin">
+              <p class="calculator__prayer-label">😈 Sprawdź co będzie gdy będziesz za dużo grzeszyć:</p>
               <div class="calculator__prayer-group">
-                <button class="calculator__prayer-btn calculator__prayer-btn--prayer" onclick={() => pray(1)}>
-                  Modlitwa Grzesznika<br/><small>-1% → {Math.max(0.1, parseFloat(rate) - 1).toFixed(1)}%</small>
+                <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(1)}>
+                  Grzesznik<br/><small>+1% → {(parseFloat(rate) + 1).toFixed(1)}%</small>
                 </button>
-                <button class="calculator__prayer-btn calculator__prayer-btn--prayer" onclick={() => pray(2)}>
-                  Modlitwa Wiernego<br/><small>-2% → {Math.max(0.1, parseFloat(rate) - 2).toFixed(1)}%</small>
+                <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(2)}>
+                  Grzesznik+<br/><small>+2% → {(parseFloat(rate) + 2).toFixed(1)}%</small>
                 </button>
-                <button class="calculator__prayer-btn calculator__prayer-btn--prayer" onclick={() => pray(3)}>
-                  Modlitwa Świętego<br/><small>-3% → {Math.max(0.1, parseFloat(rate) - 3).toFixed(1)}%</small>
+                <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(3)}>
+                  Grzesznik Premium<br/><small>+3% → {(parseFloat(rate) + 3).toFixed(1)}%</small>
                 </button>
               </div>
             </div>
