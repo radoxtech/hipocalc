@@ -121,7 +121,7 @@
         },
         {
           label: 'Skróć okres',
-          stroke: '#22C55E',
+          stroke: '#DC2626',
           width: 2,
           dash: [6, 6],
           value: (_u: uPlot, v: number) => v ? `${formatCurrency(v)} zł` : '—'
@@ -271,7 +271,7 @@
   }
 
   .scenario-comparison__card--shorten {
-    border-left-color: #22C55E;
+    border-left-color: #DC2626;
   }
 
   .scenario-comparison__card--reduce {

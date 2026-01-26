@@ -452,6 +452,12 @@
      return `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
    }
 
+   function getEndYear(totalMonths: number): number {
+     const date = new Date();
+     date.setMonth(date.getMonth() + totalMonths);
+     return date.getFullYear();
+   }
+
   // Theme icon components (SVG)
   const SunIcon = () => `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="3"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="10" y1="1" x2="10" y2="3"/><line x1="10" y1="17" x2="10" y2="19"/><line x1="19" y1="10" x2="17" y2="10"/><line x1="3" y1="10" x2="1" y2="10"/><line x1="16.657" y1="3.343" x2="15.243" y2="4.757"/><line x1="4.757" y1="15.243" x2="3.343" y2="16.657"/><line x1="16.657" y1="16.657" x2="15.243" y2="15.243"/><line x1="4.757" y1="4.757" x2="3.343" y2="3.343"/></g></svg>`;
   
@@ -497,7 +503,7 @@
       <form class="calculator__form" onsubmit={(e) => { e.preventDefault(); calculate(); }}>
         <div class="calculator__form-grid">
            <VintageInput
-             label="Kwota kredytu"
+             label="Pozostały kapitał do spłaty"
              name="principal"
              type="number"
              bind:value={principal}
@@ -509,7 +515,7 @@
 
             <div class="calculator__input-group calculator__input-group--with-toggle">
               <VintageInput
-                label="Okres kredytu"
+                label="Pozostało do spłaty"
                 name="duration"
                 type="number"
                 value={durationValue}
@@ -748,6 +754,7 @@
               <tr>
                 <th>Strategia</th>
                 <th>Okres spłaty</th>
+                <th>Koniec</th>
                 <th>Suma odsetek</th>
                 <th>Oszczędność</th>
               </tr>
@@ -759,6 +766,7 @@
                   <span class="calculator__strategy-hint">Spłata podstawowa</span>
                 </td>
                 <td>{Math.ceil(scheduleNone.summary.totalMonths / 12)} lat ({scheduleNone.summary.totalMonths} mies.)</td>
+                <td>{getEndYear(scheduleNone.summary.totalMonths)}</td>
                 <td>{formatCurrency(scheduleNone.summary.totalInterest)} zł</td>
                 <td>—</td>
               </tr>
@@ -768,6 +776,7 @@
                   <span class="calculator__strategy-hint">Niższe miesięczne obciążenie</span>
                 </td>
                 <td>{Math.ceil(scheduleReducePayment.summary.totalMonths / 12)} lat ({scheduleReducePayment.summary.totalMonths} mies.)</td>
+                <td>{getEndYear(scheduleReducePayment.summary.totalMonths)}</td>
                 <td>{formatCurrency(scheduleReducePayment.summary.totalInterest)} zł</td>
                 <td class="calculator__savings">{formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleReducePayment.summary.totalInterest))} zł</td>
               </tr>
@@ -780,6 +789,7 @@
                   </span>
                 </td>
                 <td>{Math.ceil(scheduleShortenTermReinvest.summary.totalMonths / 12)} lat ({scheduleShortenTermReinvest.summary.totalMonths} mies.)</td>
+                <td>{getEndYear(scheduleShortenTermReinvest.summary.totalMonths)}</td>
                 <td>{formatCurrency(scheduleShortenTermReinvest.summary.totalInterest)} zł</td>
                 <td class="calculator__savings">{formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTermReinvest.summary.totalInterest))} zł</td>
               </tr>
@@ -789,6 +799,7 @@
                   <span class="calculator__strategy-hint">Rata stała, szybsza spłata</span>
                 </td>
                 <td>{Math.ceil(scheduleShortenTerm.summary.totalMonths / 12)} lat ({scheduleShortenTerm.summary.totalMonths} mies.)</td>
+                <td>{getEndYear(scheduleShortenTerm.summary.totalMonths)}</td>
                 <td>{formatCurrency(scheduleShortenTerm.summary.totalInterest)} zł</td>
                 <td class="calculator__savings">{formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTerm.summary.totalInterest))} zł</td>
               </tr>
@@ -1232,6 +1243,19 @@
     background: var(--color-cream);
     border: 1px solid var(--color-gold);
     border-radius: var(--radius-md);
+  }
+
+  :global([data-theme="dark"]) .calculator__golden-result {
+    background: #3D3000;
+    border-color: var(--color-gold);
+  }
+
+  :global([data-theme="dark"]) .calculator__golden-result h4 {
+    color: var(--color-gold);
+  }
+
+  :global([data-theme="dark"]) .calculator__golden-stat-value {
+    color: var(--color-gold);
   }
 
   .calculator__golden-result h4 {
