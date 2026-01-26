@@ -58,18 +58,8 @@
 
       balanceNone.push(noneVal);
       balanceReduce.push(reduceVal);
-      
-      // Offset lines only when values are nearly identical (within 100 zł)
-      // This makes overlapping lines visible while keeping accurate values when different
-      const linesOverlap = reducePlusVal !== null && shortenVal !== null && 
-                           Math.abs(reducePlusVal - shortenVal) < 100;
-      
-      balanceReducePlus.push(reducePlusVal !== null 
-        ? reducePlusVal + (linesOverlap ? 2000 : 0) 
-        : null);
-      balanceShorten.push(shortenVal !== null 
-        ? shortenVal - (linesOverlap ? 2000 : 0) 
-        : null);
+      balanceReducePlus.push(reducePlusVal);
+      balanceShorten.push(shortenVal);
     }
 
     const data: uPlot.AlignedData = [
@@ -126,14 +116,14 @@
         {
           label: 'Zmniejsz ratę+',
           stroke: '#7B2D9E',
-          width: 3,
+          width: 4,
           value: (_u: uPlot, v: number) => v ? `${formatCurrency(v)} zł` : '—'
         },
         {
           label: 'Skróć okres',
           stroke: '#A0201E',
-          width: 3,
-          dash: [8, 4],
+          width: 2,
+          dash: [6, 6],
           value: (_u: uPlot, v: number) => v ? `${formatCurrency(v)} zł` : '—'
         }
       ],
