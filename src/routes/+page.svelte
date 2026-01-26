@@ -48,8 +48,8 @@
     let currentPage = $state(1);
     const rowsPerPage = 50;
 
-    // Reinvest savings toggle (shorten-term strategy enhancement)
-    let reinvestSavings = $state(false);
+     // Reinvest savings toggle (shorten-term strategy enhancement)
+     let reinvestSavings = $state(true);
 
     // Load saved form data on mount (browser only)
     if (browser) {
@@ -987,11 +987,12 @@
      text-transform: lowercase;
    }
 
-   .calculator__duration-toggle:hover {
-     background: var(--color-gold-dark);
-     transform: translateY(-1px);
-     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-   }
+    .calculator__duration-toggle:hover {
+      background: #AA8C28;
+      color: var(--color-cream);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
 
    .calculator__duration-toggle:active {
      transform: translateY(0);
