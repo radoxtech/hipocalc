@@ -462,6 +462,11 @@
   </header>
 
   <main class="calculator__main">
+    <!-- Construction Banner -->
+    <div class="calculator__construction-banner">
+      <p>⚠️ Kalkulator w fazie testów - wyniki mogą być niedokładne</p>
+    </div>
+
     <!-- Step 1: Loan Data -->
     <VintageCard title="Krok 1: Dane kredytu" variant="highlight">
       <form class="calculator__form" onsubmit={(e) => { e.preventDefault(); calculate(); }}>
@@ -945,13 +950,30 @@
     box-shadow: var(--focus-ring);
   }
 
-  .calculator__main {
-    flex: 1;
-    max-width: 900px;
-    width: 100%;
-    margin: 0 auto;
-    padding: var(--space-lg) var(--space-md);
-  }
+   .calculator__main {
+     flex: 1;
+     max-width: 900px;
+     width: 100%;
+     margin: 0 auto;
+     padding: var(--space-lg) var(--space-md);
+   }
+
+   .calculator__construction-banner {
+     background: #FFF3CD;
+     border-left: 4px solid var(--color-gold);
+     padding: var(--space-md);
+     margin-bottom: var(--space-lg);
+     text-align: center;
+     border-radius: var(--radius-sm);
+   }
+
+   .calculator__construction-banner p {
+     margin: 0;
+     color: var(--color-ink);
+     font-weight: 600;
+     font-family: var(--font-body);
+     font-size: var(--text-base);
+   }
 
   .calculator__form-grid {
     display: grid;
