@@ -178,6 +178,80 @@
      let activeTab = $state<'comparison' | 'balance' | 'savings' | 'schedule'>('comparison');
      let selectedScheduleStrategy = $state<'none' | 'reduce' | 'reduce-plus' | 'shorten'>('reduce-plus');
 
+     // Modlitwa o Spadek Stóp state
+     let prayerResult = $state<{
+       type: 'prayer' | 'sin';
+       level: 1 | 2 | 3;
+       schedule: Schedule;
+       originalInterest: Decimal;
+       newInterest: Decimal;
+       difference: Decimal;
+     } | null>(null);
+
+     function pray(level: 1 | 2 | 3) {
+       const currentRate = parseFloat(rate);
+       const newRate = Math.max(0.1, currentRate - level);
+       const m = durationMode === 'years' ? Math.round(parseFloat(years) * 12) : Math.round(parseFloat(months));
+       
+       const loan: Loan = {
+         principal: new Decimal(principal),
+         annualRate: new Decimal(newRate).dividedBy(100),
+         months: m,
+         type: loanType
+       };
+
+       const overpayments: Overpayments = {
+         monthly: new Decimal(monthlyOverpayment || '0'),
+         yearly: new Decimal(yearlyOverpayment || '0'),
+         yearlyMonth: parseInt(yearlyMonth) || 12
+       };
+       
+       const schedule = generateAmortizationSchedule(loan, overpayments, 'reduce-payment');
+       
+       const originalSchedule = scheduleShortenTermReinvest || scheduleNone;
+       
+       prayerResult = {
+         type: 'prayer',
+         level,
+         schedule,
+         originalInterest: originalSchedule?.summary.totalInterest || new Decimal(0),
+         newInterest: schedule.summary.totalInterest,
+         difference: (originalSchedule?.summary.totalInterest || new Decimal(0)).minus(schedule.summary.totalInterest)
+       };
+     }
+
+     function sin(level: 1 | 2 | 3) {
+       const currentRate = parseFloat(rate);
+       const newRate = currentRate + level;
+       const m = durationMode === 'years' ? Math.round(parseFloat(years) * 12) : Math.round(parseFloat(months));
+       
+       const loan: Loan = {
+         principal: new Decimal(principal),
+         annualRate: new Decimal(newRate).dividedBy(100),
+         months: m,
+         type: loanType
+       };
+
+       const overpayments: Overpayments = {
+         monthly: new Decimal(monthlyOverpayment || '0'),
+         yearly: new Decimal(yearlyOverpayment || '0'),
+         yearlyMonth: parseInt(yearlyMonth) || 12
+       };
+       
+       const schedule = generateAmortizationSchedule(loan, overpayments, 'reduce-payment');
+       
+       const originalSchedule = scheduleShortenTermReinvest || scheduleNone;
+       
+       prayerResult = {
+         type: 'sin',
+         level,
+         schedule,
+         originalInterest: originalSchedule?.summary.totalInterest || new Decimal(0),
+         newInterest: schedule.summary.totalInterest,
+         difference: schedule.summary.totalInterest.minus(originalSchedule?.summary.totalInterest || new Decimal(0))
+       };
+     }
+
   // Validation
   let errors = $state<Record<string, string>>({});
 
@@ -947,6 +1021,91 @@
         </div>
       </section>
     {/if}
+
+    <!-- Modlitwa o Spadek Stóp -->
+    {#if hasCalculated}
+      <SectionDivider variant="ornate" />
+      
+      <section class="calculator__prayer">
+        <VintageCard title="Modlitwa o Spadek Stóp" variant="default">
+          <p class="calculator__prayer-intro">
+            Sprawdź jak zmiana stóp procentowych wpłynie na Twój kredyt. Obecne oprocentowanie: <strong>{rate}%</strong>
+          </p>
+
+          <div class="calculator__prayer-buttons">
+            <p class="calculator__prayer-label">🙏 Pomodl się o spadek stóp:</p>
+            <div class="calculator__prayer-group">
+              <button class="calculator__prayer-btn calculator__prayer-btn--prayer" onclick={() => pray(1)}>
+                Modlitwa Grzesznika<br/><small>-1% ({Math.max(0.1, parseFloat(rate) - 1).toFixed(1)}%)</small>
+              </button>
+              <button class="calculator__prayer-btn calculator__prayer-btn--prayer" onclick={() => pray(2)}>
+                Modlitwa Wiernego<br/><small>-2% ({Math.max(0.1, parseFloat(rate) - 2).toFixed(1)}%)</small>
+              </button>
+              <button class="calculator__prayer-btn calculator__prayer-btn--prayer" onclick={() => pray(3)}>
+                Modlitwa Świętego<br/><small>-3% ({Math.max(0.1, parseFloat(rate) - 3).toFixed(1)}%)</small>
+              </button>
+            </div>
+          </div>
+
+          <div class="calculator__prayer-buttons">
+            <p class="calculator__prayer-label">😈 Sprawdź co będzie gdy będziesz grzeszyć za bardzo i modlitwy nie zostaną wysłuchane:</p>
+            <div class="calculator__prayer-group">
+              <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(1)}>
+                Grzesznik<br/><small>+1% ({(parseFloat(rate) + 1).toFixed(1)}%)</small>
+              </button>
+              <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(2)}>
+                Grzesznik+<br/><small>+2% ({(parseFloat(rate) + 2).toFixed(1)}%)</small>
+              </button>
+              <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(3)}>
+                Grzesznik Premium<br/><small>+3% ({(parseFloat(rate) + 3).toFixed(1)}%)</small>
+              </button>
+            </div>
+          </div>
+
+          {#if prayerResult}
+            <div class="calculator__prayer-result calculator__prayer-result--{prayerResult.type}">
+              <h4>
+                {#if prayerResult.type === 'prayer'}
+                  🙏 Wynik modlitwy ({prayerResult.level === 1 ? 'Grzesznika' : prayerResult.level === 2 ? 'Wiernego' : 'Świętego'})
+                {:else}
+                  😈 Skutki grzechu ({prayerResult.level === 1 ? 'Grzesznik' : prayerResult.level === 2 ? 'Grzesznik+' : 'Premium'})
+                {/if}
+              </h4>
+              <div class="calculator__prayer-result-grid">
+                <div class="calculator__prayer-stat">
+                  <span class="calculator__prayer-stat-label">Nowe oprocentowanie</span>
+                  <span class="calculator__prayer-stat-value">
+                    {prayerResult.type === 'prayer' 
+                      ? Math.max(0.1, parseFloat(rate) - prayerResult.level).toFixed(1) 
+                      : (parseFloat(rate) + prayerResult.level).toFixed(1)}%
+                  </span>
+                </div>
+                <div class="calculator__prayer-stat">
+                  <span class="calculator__prayer-stat-label">Suma odsetek</span>
+                  <span class="calculator__prayer-stat-value">
+                    {prayerResult.newInterest.toDecimalPlaces(0).toNumber().toLocaleString('pl-PL')} zł
+                  </span>
+                </div>
+                <div class="calculator__prayer-stat">
+                  <span class="calculator__prayer-stat-label">
+                    {prayerResult.type === 'prayer' ? 'Oszczędzisz' : 'Stracisz'}
+                  </span>
+                  <span class="calculator__prayer-stat-value calculator__prayer-stat-value--{prayerResult.type}">
+                    {prayerResult.difference.toDecimalPlaces(0).toNumber().toLocaleString('pl-PL')} zł
+                  </span>
+                </div>
+                <div class="calculator__prayer-stat">
+                  <span class="calculator__prayer-stat-label">Okres spłaty</span>
+                  <span class="calculator__prayer-stat-value">
+                    {prayerResult.schedule.summary.totalMonths} mies. ({getEndYear(prayerResult.schedule.summary.totalMonths)})
+                  </span>
+                </div>
+              </div>
+            </div>
+          {/if}
+        </VintageCard>
+      </section>
+    {/if}
   </main>
 
   <!-- Footer -->
@@ -1647,5 +1806,156 @@
     .calculator__golden-banner-arrow {
       transform: rotate(90deg);
     }
+  }
+
+  /* Prayer section */
+  .calculator__prayer-intro {
+    font-family: var(--font-body);
+    color: var(--color-ink-light);
+    margin-bottom: var(--space-lg);
+  }
+
+  .calculator__prayer-buttons {
+    margin-bottom: var(--space-lg);
+  }
+
+  .calculator__prayer-label {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    margin-bottom: var(--space-sm);
+  }
+
+  .calculator__prayer-group {
+    display: flex;
+    gap: var(--space-md);
+    flex-wrap: wrap;
+  }
+
+  .calculator__prayer-btn {
+    flex: 1;
+    min-width: 140px;
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    border: 2px solid;
+    font-family: var(--font-heading);
+    font-size: var(--text-base);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .calculator__prayer-btn small {
+    display: block;
+    font-size: var(--text-sm);
+    opacity: 0.8;
+    margin-top: var(--space-xs);
+  }
+
+  .calculator__prayer-btn--prayer {
+    background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+    border-color: var(--color-gold);
+    color: #92400E;
+  }
+
+  .calculator__prayer-btn--prayer:hover {
+    background: linear-gradient(135deg, #FDE68A 0%, #FCD34D 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(189, 149, 68, 0.3);
+  }
+
+  .calculator__prayer-btn--sin {
+    background: linear-gradient(135deg, #FEE2E2 0%, #FECACA 100%);
+    border-color: #DC2626;
+    color: #991B1B;
+  }
+
+  .calculator__prayer-btn--sin:hover {
+    background: linear-gradient(135deg, #FECACA 0%, #FCA5A5 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.3);
+  }
+
+  .calculator__prayer-result {
+    margin-top: var(--space-lg);
+    padding: var(--space-md);
+    border-radius: var(--radius-md);
+    border: 2px solid;
+  }
+
+  .calculator__prayer-result--prayer {
+    background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+    border-color: #10B981;
+  }
+
+  .calculator__prayer-result--sin {
+    background: linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%);
+    border-color: #DC2626;
+  }
+
+  .calculator__prayer-result h4 {
+    font-family: var(--font-heading);
+    font-size: var(--text-lg);
+    margin: 0 0 var(--space-md) 0;
+  }
+
+  .calculator__prayer-result-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--space-md);
+  }
+
+  .calculator__prayer-stat {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .calculator__prayer-stat-label {
+    font-size: var(--text-sm);
+    color: var(--color-ink-light);
+  }
+
+  .calculator__prayer-stat-value {
+    font-family: var(--font-heading);
+    font-size: var(--text-xl);
+    font-weight: 600;
+  }
+
+  .calculator__prayer-stat-value--prayer {
+    color: #059669;
+  }
+
+  .calculator__prayer-stat-value--sin {
+    color: #DC2626;
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-btn--prayer {
+    background: linear-gradient(135deg, #78350F 0%, #92400E 100%);
+    color: #FEF3C7;
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-btn--sin {
+    background: linear-gradient(135deg, #7F1D1D 0%, #991B1B 100%);
+    color: #FEE2E2;
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-result--prayer {
+    background: linear-gradient(135deg, #064E3B 0%, #065F46 100%);
+    border-color: #10B981;
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-result--sin {
+    background: linear-gradient(135deg, #7F1D1D 0%, #991B1B 100%);
+    border-color: #DC2626;
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-result h4 {
+    color: #F3F4F6;
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-stat-value--prayer {
+    color: #34D399;
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-stat-value--sin {
+    color: #F87171;
   }
 </style>
