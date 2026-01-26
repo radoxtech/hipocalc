@@ -3,9 +3,9 @@
   import Decimal from 'decimal.js';
   import { VintageCard, VintageInput, VintageButton, VintageSelect, SectionDivider, BankSeal } from '$lib/components';
   import { BalanceChart, SavingsChart, ScenarioComparison } from '$lib/components/charts';
-  import { generateAmortizationSchedule } from '$lib/engine/mortgage';
+  import { generateAmortizationSchedule, calculateAnnuityPayment } from '$lib/engine/mortgage';
   import { calculateGoldenMean } from '$lib/engine/golden-mean';
-  import type { Loan, Overpayments, Schedule } from '$lib/engine/types';
+  import type { Loan, Overpayments, Schedule, ScheduleRow } from '$lib/engine/types';
   import type { GoldenMeanInput, GoldenMeanOutput } from '$lib/engine/golden-mean';
 
   // Storage keys
@@ -33,31 +33,35 @@
    let emergencyFundMonths = $state('6');
 
    // Pagination state
-   let currentPage = $state(1);
-   const rowsPerPage = 50;
+    let currentPage = $state(1);
+    const rowsPerPage = 50;
 
-  // Load saved form data on mount (browser only)
-  if (browser) {
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-          const data = JSON.parse(saved);
-          principal = data.principal ?? principal;
-          years = data.years ?? years;
-          months = data.months ?? months;
-          rate = data.rate ?? rate;
-          loanType = data.loanType ?? loanType;
-          monthlyOverpayment = data.monthlyOverpayment ?? monthlyOverpayment;
-          yearlyOverpayment = data.yearlyOverpayment ?? yearlyOverpayment;
-          yearlyMonth = data.yearlyMonth ?? yearlyMonth;
-          netIncome = data.netIncome ?? netIncome;
-          fixedExpenses = data.fixedExpenses ?? fixedExpenses;
-          emergencyStatus = data.emergencyStatus ?? emergencyStatus;
-          emergencyFundMonths = data.emergencyFundMonths ?? emergencyFundMonths;
-        }
-      } catch {
-        // Ignore storage errors
-      }
+    // Reinvest savings toggle (shorten-term strategy enhancement)
+    let reinvestSavings = $state(false);
+
+   // Load saved form data on mount (browser only)
+   if (browser) {
+       try {
+         const saved = localStorage.getItem(STORAGE_KEY);
+         if (saved) {
+           const data = JSON.parse(saved);
+           principal = data.principal ?? principal;
+           years = data.years ?? years;
+           months = data.months ?? months;
+           rate = data.rate ?? rate;
+           loanType = data.loanType ?? loanType;
+           monthlyOverpayment = data.monthlyOverpayment ?? monthlyOverpayment;
+           yearlyOverpayment = data.yearlyOverpayment ?? yearlyOverpayment;
+           yearlyMonth = data.yearlyMonth ?? yearlyMonth;
+           netIncome = data.netIncome ?? netIncome;
+           fixedExpenses = data.fixedExpenses ?? fixedExpenses;
+           emergencyStatus = data.emergencyStatus ?? emergencyStatus;
+           emergencyFundMonths = data.emergencyFundMonths ?? emergencyFundMonths;
+           reinvestSavings = data.reinvestSavings ?? reinvestSavings;
+         }
+       } catch {
+         // Ignore storage errors
+       }
 
      // Load theme preference
      try {
@@ -91,29 +95,30 @@
      }
    });
 
-   // Save form data to localStorage whenever values change
-    function saveFormData() {
-      if (!browser) return;
-      try {
-        const data = {
-          principal,
-          years,
-          months,
-          rate,
-          loanType,
-          monthlyOverpayment,
-          yearlyOverpayment,
-          yearlyMonth,
-          netIncome,
-          fixedExpenses,
-          emergencyStatus,
-          emergencyFundMonths
-        };
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-      } catch {
-        // Ignore storage errors
-      }
-    }
+    // Save form data to localStorage whenever values change
+     function saveFormData() {
+       if (!browser) return;
+       try {
+         const data = {
+           principal,
+           years,
+           months,
+           rate,
+           loanType,
+           monthlyOverpayment,
+           yearlyOverpayment,
+           yearlyMonth,
+           netIncome,
+           fixedExpenses,
+           emergencyStatus,
+           emergencyFundMonths,
+           reinvestSavings
+         };
+         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+       } catch {
+         // Ignore storage errors
+       }
+     }
 
   // Apply theme to document
   function applyTheme(selectedTheme: 'light' | 'dark' | 'auto') {
@@ -147,21 +152,23 @@
      }
    });
 
-    // Watch all form fields and save when they change
-    $effect(() => {
-      // Access all reactive state to track dependencies
-      principal; years; months; rate; loanType; monthlyOverpayment;
-      yearlyOverpayment; yearlyMonth; netIncome; fixedExpenses; emergencyStatus; emergencyFundMonths;
-      saveFormData();
-    });
+     // Watch all form fields and save when they change
+     $effect(() => {
+       // Access all reactive state to track dependencies
+       principal; years; months; rate; loanType; monthlyOverpayment;
+       yearlyOverpayment; yearlyMonth; netIncome; fixedExpenses; emergencyStatus; emergencyFundMonths;
+       reinvestSavings;
+       saveFormData();
+     });
   let goldenMeanResult = $state<GoldenMeanOutput | null>(null);
 
-  // Results state
-  let scheduleNone = $state<Schedule | null>(null);
-  let scheduleShortenTerm = $state<Schedule | null>(null);
-  let scheduleReducePayment = $state<Schedule | null>(null);
-  let hasCalculated = $state(false);
-  let activeTab = $state<'comparison' | 'balance' | 'savings' | 'schedule'>('comparison');
+   // Results state
+   let scheduleNone = $state<Schedule | null>(null);
+   let scheduleShortenTerm = $state<Schedule | null>(null);
+   let scheduleReducePayment = $state<Schedule | null>(null);
+   let scheduleShortenTermReinvest = $state<Schedule | null>(null);
+   let hasCalculated = $state(false);
+   let activeTab = $state<'comparison' | 'balance' | 'savings' | 'schedule'>('comparison');
 
   // Validation
   let errors = $state<Record<string, string>>({});
@@ -189,33 +196,148 @@
      return Object.keys(errors).length === 0;
    }
 
-   function calculate() {
-     if (!validateInputs()) return;
+    function calculateShortenTermReinvest(loan: Loan, baseSchedule: Schedule, baseOverpayments: Overpayments, scheduleWithoutOverpayment: Schedule): Schedule {
+      const rows: ScheduleRow[] = [];
+      const monthlyRate = loan.annualRate.dividedBy(12);
+      
+      let balance = loan.principal;
+      let currentAnnuityPayment = loan.type === 'annuity'
+        ? calculateAnnuityPayment(loan.principal, monthlyRate, loan.months)
+        : new Decimal(0);
+      
+      const originalCapitalPortion = loan.principal.dividedBy(loan.months);
+      let currentCapitalPortion = originalCapitalPortion;
 
-     const loan: Loan = {
-       principal: new Decimal(principal),
-       annualRate: new Decimal(rate).dividedBy(100),
-       months: Math.round(parseFloat(months)),
-       type: loanType
-     };
+      let totalInterest = new Decimal(0);
+      let totalOverpayments = new Decimal(0);
+      let totalPaid = new Decimal(0);
+      let month = 0;
 
-     const overpayments: Overpayments = {
-       monthly: new Decimal(monthlyOverpayment || '0'),
-       yearly: new Decimal(yearlyOverpayment || '0'),
-       yearlyMonth: parseInt(yearlyMonth) || 12
-     };
+      while (balance.greaterThan(0.01) && month < loan.months * 2) {
+        month++;
+        
+        // 1. Calculate interest on current balance
+        const interest = balance.times(monthlyRate);
+        totalInterest = totalInterest.plus(interest);
 
-     const noOverpayments: Overpayments = {
-       monthly: new Decimal(0),
-       yearly: new Decimal(0),
-       yearlyMonth: 12
-     };
+        // 2. Calculate payment based on loan type
+        let payment: Decimal;
+        let principalPart: Decimal;
 
-     scheduleNone = generateAmortizationSchedule(loan, noOverpayments, 'none');
-     scheduleShortenTerm = generateAmortizationSchedule(loan, overpayments, 'shorten-term');
-     scheduleReducePayment = generateAmortizationSchedule(loan, overpayments, 'reduce-payment');
-     hasCalculated = true;
-   }
+        if (loan.type === 'annuity') {
+          payment = currentAnnuityPayment;
+          principalPart = payment.minus(interest);
+          
+          if (principalPart.greaterThan(balance)) {
+            principalPart = balance;
+            payment = principalPart.plus(interest);
+          }
+        } else {
+          principalPart = currentCapitalPortion;
+          
+          if (principalPart.greaterThan(balance)) {
+            principalPart = balance;
+          }
+          
+          payment = principalPart.plus(interest);
+        }
+
+        // 3. Apply payment to balance
+        balance = balance.minus(principalPart);
+
+        // 4. Calculate overpayment with reinvestment
+        let overpayment = baseOverpayments.monthly;
+        
+        // Add yearly overpayment if applicable
+        if (month % 12 === baseOverpayments.yearlyMonth % 12 || 
+            (baseOverpayments.yearlyMonth === 12 && month % 12 === 0)) {
+          overpayment = overpayment.plus(baseOverpayments.yearly);
+        }
+
+        // REINVEST LOGIC: Add the savings from interest difference
+        // Savings = payment without overpayment - payment with overpayment
+        if (month <= scheduleWithoutOverpayment.rows.length) {
+          const paymentWithoutOverpayment = scheduleWithoutOverpayment.rows[month - 1]?.payment || new Decimal(0);
+          const savingsThisMonth = paymentWithoutOverpayment.minus(payment);
+          
+          if (savingsThisMonth.greaterThan(0)) {
+            overpayment = overpayment.plus(savingsThisMonth);
+          }
+        }
+
+        // Cap overpayment to remaining balance
+        if (overpayment.greaterThan(balance)) {
+          overpayment = balance;
+        }
+
+        // Apply overpayment
+        balance = balance.minus(overpayment);
+        totalOverpayments = totalOverpayments.plus(overpayment);
+
+        // Record row
+        const row: ScheduleRow = {
+          month,
+          payment,
+          principal: principalPart,
+          interest,
+          overpayment,
+          totalPaid: payment.plus(overpayment),
+          balanceAfter: balance
+        };
+
+        rows.push(row);
+        totalPaid = totalPaid.plus(row.totalPaid);
+
+        // Exit if balance is effectively zero
+        if (balance.lessThanOrEqualTo(0.01)) {
+          break;
+        }
+      }
+
+      return {
+        rows,
+        summary: {
+          totalMonths: rows.length,
+          totalPaid,
+          totalInterest,
+          totalOverpayments
+        }
+      };
+    }
+
+    function calculate() {
+      if (!validateInputs()) return;
+
+      const loan: Loan = {
+        principal: new Decimal(principal),
+        annualRate: new Decimal(rate).dividedBy(100),
+        months: Math.round(parseFloat(months)),
+        type: loanType
+      };
+
+      const overpayments: Overpayments = {
+        monthly: new Decimal(monthlyOverpayment || '0'),
+        yearly: new Decimal(yearlyOverpayment || '0'),
+        yearlyMonth: parseInt(yearlyMonth) || 12
+      };
+
+      const noOverpayments: Overpayments = {
+        monthly: new Decimal(0),
+        yearly: new Decimal(0),
+        yearlyMonth: 12
+      };
+
+      scheduleNone = generateAmortizationSchedule(loan, noOverpayments, 'none');
+      scheduleShortenTerm = generateAmortizationSchedule(loan, overpayments, 'shorten-term');
+      scheduleReducePayment = generateAmortizationSchedule(loan, overpayments, 'reduce-payment');
+      
+      // Generate reinvest schedule if needed
+      if (scheduleNone) {
+        scheduleShortenTermReinvest = calculateShortenTermReinvest(loan, scheduleShortenTerm, overpayments, scheduleNone);
+      }
+      
+      hasCalculated = true;
+    }
 
    function calculateGoldenMeanResult() {
      if (!netIncome || !fixedExpenses) return;
@@ -563,22 +685,54 @@
             </dl>
           </div>
 
-          <div class="calculator__summary-card calculator__summary-card--reduce">
-            <h3>Zmniejsz ratę</h3>
-            <dl>
-              <dt>Okres spłaty</dt>
-              <dd>{Math.ceil(scheduleReducePayment.summary.totalMonths / 12)} lat ({scheduleReducePayment.summary.totalMonths} mies.)</dd>
-              <dt>Suma odsetek</dt>
-              <dd>{formatCurrency(scheduleReducePayment.summary.totalInterest)} zł</dd>
-              <dt>Oszczędność</dt>
-              <dd class="calculator__savings">
-                {formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleReducePayment.summary.totalInterest))} zł
-              </dd>
-            </dl>
-          </div>
-        </div>
+           <div class="calculator__summary-card calculator__summary-card--reduce">
+             <h3>Zmniejsz ratę</h3>
+             <dl>
+               <dt>Okres spłaty</dt>
+               <dd>{Math.ceil(scheduleReducePayment.summary.totalMonths / 12)} lat ({scheduleReducePayment.summary.totalMonths} mies.)</dd>
+               <dt>Suma odsetek</dt>
+               <dd>{formatCurrency(scheduleReducePayment.summary.totalInterest)} zł</dd>
+               <dt>Oszczędność</dt>
+               <dd class="calculator__savings">
+                 {formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleReducePayment.summary.totalInterest))} zł
+               </dd>
+             </dl>
+           </div>
 
-        <!-- Tabs -->
+           {#if reinvestSavings && scheduleShortenTermReinvest}
+             <div class="calculator__summary-card calculator__summary-card--reinvest">
+               <h3>Skróć okres + Reinwestuj</h3>
+               <dl>
+                 <dt>Okres spłaty</dt>
+                 <dd>{Math.ceil(scheduleShortenTermReinvest.summary.totalMonths / 12)} lat ({scheduleShortenTermReinvest.summary.totalMonths} mies.)</dd>
+                 <dt>Suma odsetek</dt>
+                 <dd>{formatCurrency(scheduleShortenTermReinvest.summary.totalInterest)} zł</dd>
+                 <dt>Oszczędność</dt>
+                 <dd class="calculator__savings">
+                   {formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTermReinvest.summary.totalInterest))} zł
+                 </dd>
+               </dl>
+             </div>
+           {/if}
+         </div>
+
+         <!-- Reinvest Savings Toggle -->
+         <div class="calculator__reinvest-toggle">
+           <label>
+             <input 
+               type="checkbox" 
+               bind:checked={reinvestSavings}
+             />
+             <span>Nadpłacaj więcej - reinwestuj oszczędności z odsetek</span>
+           </label>
+           {#if reinvestSavings}
+             <p class="calculator__reinvest-note">
+               💡 Dodatkowa nadpłata z oszczędności skróci kredyt jeszcze bardziej
+             </p>
+           {/if}
+         </div>
+         
+         <!-- Tabs -->
         <div class="calculator__tabs" role="tablist">
           <button
             role="tab"
@@ -936,9 +1090,13 @@
     border-left-color: var(--color-burgundy);
   }
 
-  .calculator__summary-card--reduce {
-    border-left-color: #1E40AF;
-  }
+   .calculator__summary-card--reduce {
+     border-left-color: #1E40AF;
+   }
+
+   .calculator__summary-card--reinvest {
+     border-left-color: #16A34A;
+   }
 
   .calculator__summary-card h3 {
     font-family: var(--font-heading);
@@ -964,12 +1122,50 @@
     font-weight: 500;
   }
 
-  .calculator__savings {
-    color: var(--color-success);
-    font-weight: 600 !important;
-  }
+   .calculator__savings {
+     color: var(--color-success);
+     font-weight: 600 !important;
+   }
 
-  /* Tabs */
+   .calculator__reinvest-toggle {
+     margin: var(--space-lg) 0;
+     padding: var(--space-md);
+     background: var(--color-cream);
+     border: 2px solid var(--color-gold);
+     border-radius: var(--radius-md);
+   }
+
+   .calculator__reinvest-toggle label {
+     display: flex;
+     align-items: center;
+     gap: var(--space-sm);
+     cursor: pointer;
+     font-family: var(--font-body);
+     user-select: none;
+   }
+
+   .calculator__reinvest-toggle input[type="checkbox"] {
+     width: 20px;
+     height: 20px;
+     cursor: pointer;
+     accent-color: var(--color-burgundy);
+   }
+
+   .calculator__reinvest-toggle span {
+     font-weight: 500;
+     color: var(--color-ink);
+   }
+
+   .calculator__reinvest-note {
+     margin-top: var(--space-sm);
+     margin-bottom: 0;
+     font-size: var(--text-sm);
+     color: var(--color-gold-dark);
+     font-style: italic;
+     padding-left: 2.75rem;
+   }
+
+   /* Tabs */
   .calculator__tabs {
     display: flex;
     gap: var(--space-xs);
