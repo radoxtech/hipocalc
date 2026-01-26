@@ -25,33 +25,35 @@
   // Theme state
   let theme = $state<'light' | 'dark' | 'auto'>('auto');
 
-  // Złoty Środek state
-  let showGoldenMean = $state(false);
-  let netIncome = $state('');
-  let fixedExpenses = $state('');
-  let emergencyStatus = $state<'have' | 'build-fast' | 'build-slow-3y'>('have');
+   // Złoty Środek state
+   let showGoldenMean = $state(false);
+   let netIncome = $state('');
+   let fixedExpenses = $state('');
+   let emergencyStatus = $state<'have' | 'build-fast' | 'build-slow-3y'>('have');
+   let emergencyFundMonths = $state('6');
 
   // Load saved form data on mount (browser only)
   if (browser) {
-     try {
-       const saved = localStorage.getItem(STORAGE_KEY);
-       if (saved) {
-         const data = JSON.parse(saved);
-         principal = data.principal ?? principal;
-         years = data.years ?? years;
-         months = data.months ?? months;
-         rate = data.rate ?? rate;
-         loanType = data.loanType ?? loanType;
-         monthlyOverpayment = data.monthlyOverpayment ?? monthlyOverpayment;
-         yearlyOverpayment = data.yearlyOverpayment ?? yearlyOverpayment;
-         yearlyMonth = data.yearlyMonth ?? yearlyMonth;
-         netIncome = data.netIncome ?? netIncome;
-         fixedExpenses = data.fixedExpenses ?? fixedExpenses;
-         emergencyStatus = data.emergencyStatus ?? emergencyStatus;
-       }
-     } catch {
-       // Ignore storage errors
-     }
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const data = JSON.parse(saved);
+          principal = data.principal ?? principal;
+          years = data.years ?? years;
+          months = data.months ?? months;
+          rate = data.rate ?? rate;
+          loanType = data.loanType ?? loanType;
+          monthlyOverpayment = data.monthlyOverpayment ?? monthlyOverpayment;
+          yearlyOverpayment = data.yearlyOverpayment ?? yearlyOverpayment;
+          yearlyMonth = data.yearlyMonth ?? yearlyMonth;
+          netIncome = data.netIncome ?? netIncome;
+          fixedExpenses = data.fixedExpenses ?? fixedExpenses;
+          emergencyStatus = data.emergencyStatus ?? emergencyStatus;
+          emergencyFundMonths = data.emergencyFundMonths ?? emergencyFundMonths;
+        }
+      } catch {
+        // Ignore storage errors
+      }
 
      // Load theme preference
      try {
@@ -86,27 +88,28 @@
    });
 
    // Save form data to localStorage whenever values change
-   function saveFormData() {
-     if (!browser) return;
-     try {
-       const data = {
-         principal,
-         years,
-         months,
-         rate,
-         loanType,
-         monthlyOverpayment,
-         yearlyOverpayment,
-         yearlyMonth,
-         netIncome,
-         fixedExpenses,
-         emergencyStatus
-       };
-       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-     } catch {
-       // Ignore storage errors
-     }
-   }
+    function saveFormData() {
+      if (!browser) return;
+      try {
+        const data = {
+          principal,
+          years,
+          months,
+          rate,
+          loanType,
+          monthlyOverpayment,
+          yearlyOverpayment,
+          yearlyMonth,
+          netIncome,
+          fixedExpenses,
+          emergencyStatus,
+          emergencyFundMonths
+        };
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+      } catch {
+        // Ignore storage errors
+      }
+    }
 
   // Apply theme to document
   function applyTheme(selectedTheme: 'light' | 'dark' | 'auto') {
@@ -144,7 +147,7 @@
     $effect(() => {
       // Access all reactive state to track dependencies
       principal; years; months; rate; loanType; monthlyOverpayment;
-      yearlyOverpayment; yearlyMonth; netIncome; fixedExpenses; emergencyStatus;
+      yearlyOverpayment; yearlyMonth; netIncome; fixedExpenses; emergencyStatus; emergencyFundMonths;
       saveFormData();
     });
   let goldenMeanResult = $state<GoldenMeanOutput | null>(null);
@@ -210,23 +213,23 @@
      hasCalculated = true;
    }
 
-  function calculateGoldenMeanResult() {
-    if (!netIncome || !fixedExpenses) return;
+   function calculateGoldenMeanResult() {
+     if (!netIncome || !fixedExpenses) return;
 
-    const currentPayment = scheduleNone
-      ? scheduleNone.rows[0]?.payment || new Decimal(0)
-      : new Decimal(0);
+     const currentPayment = scheduleNone
+       ? scheduleNone.rows[0]?.payment || new Decimal(0)
+       : new Decimal(0);
 
-    const input: GoldenMeanInput = {
-      netIncome: new Decimal(netIncome),
-      fixedExpenses: new Decimal(fixedExpenses),
-      mortgagePayment: currentPayment,
-      emergencyFundMonths: 6,
-      emergencyFundStatus: emergencyStatus
-    };
+     const input: GoldenMeanInput = {
+       netIncome: new Decimal(netIncome),
+       fixedExpenses: new Decimal(fixedExpenses),
+       mortgagePayment: currentPayment,
+       emergencyFundMonths: parseInt(emergencyFundMonths) || 6,
+       emergencyFundStatus: emergencyStatus
+     };
 
-    goldenMeanResult = calculateGoldenMean(input);
-  }
+     goldenMeanResult = calculateGoldenMean(input);
+   }
 
   function applyGoldenMeanRecommendation() {
     if (goldenMeanResult) {
@@ -440,6 +443,16 @@
             name="emergencyStatus"
             options={emergencyOptions}
             bind:value={emergencyStatus}
+          />
+
+          <VintageInput
+            label="Poduszka bezpieczeństwa (miesiące)"
+            name="emergencyFundMonths"
+            type="number"
+            bind:value={emergencyFundMonths}
+            min={1}
+            max={24}
+            hint="Docelowa poduszka: koszty życia na X miesięcy"
           />
         </div>
 
