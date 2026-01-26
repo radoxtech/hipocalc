@@ -651,6 +651,11 @@
       Kalkulator ma charakter informacyjny. Skonsultuj decyzje finansowe z doradcą.
     </p>
     <p class="calculator__footer-credits">
+      Stworzone przez 
+      <a href="https://github.com/radoxtech" target="_blank" rel="noopener">radoxtech</a>
+      (<a href="https://www.linkedin.com/in/radoslaw-kubiak-71836a1b5/" target="_blank" rel="noopener">LinkedIn</a>)
+    </p>
+    <p class="calculator__footer-credits">
       Dumnie stworzone przy pomocy 
       <a href="https://github.com/ohmyopencode/opencode" target="_blank" rel="noopener">Oh My OpenCode</a>
       i modeli Anthropic Claude Opus 4.5 & Sonnet 4.5
