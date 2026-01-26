@@ -173,9 +173,10 @@
     let scheduleNone = $state<Schedule | null>(null);
     let scheduleShortenTerm = $state<Schedule | null>(null);
     let scheduleReducePayment = $state<Schedule | null>(null);
-    let scheduleShortenTermReinvest = $state<Schedule | null>(null);
-    let hasCalculated = $state(false);
-    let activeTab = $state<'comparison' | 'balance' | 'savings' | 'schedule'>('comparison');
+     let scheduleShortenTermReinvest = $state<Schedule | null>(null);
+     let hasCalculated = $state(false);
+     let activeTab = $state<'comparison' | 'balance' | 'savings' | 'schedule'>('comparison');
+     let selectedScheduleStrategy = $state<'none' | 'reduce' | 'reduce-plus' | 'shorten'>('reduce-plus');
 
   // Validation
   let errors = $state<Record<string, string>>({});
@@ -380,37 +381,54 @@
      }
    }
 
-    // Pagination derived value (uses "Reduce Payment Plus" strategy)
-    const paginatedSchedule = $derived.by(() => {
-      if (!scheduleShortenTermReinvest) {
-        return {
-          rows: [],
-          totalPages: 0,
-          currentPage: 1
-        };
-      }
-      const start = (currentPage - 1) * rowsPerPage;
-      const end = start + rowsPerPage;
-      return {
-        rows: scheduleShortenTermReinvest.rows.slice(start, end),
-        totalPages: Math.ceil(scheduleShortenTermReinvest.rows.length / rowsPerPage),
-        currentPage: currentPage
-      };
-    });
+     // Pagination derived value (uses selected strategy)
+     const paginatedSchedule = $derived.by(() => {
+       let schedule: Schedule | null = null;
+       switch (selectedScheduleStrategy) {
+         case 'none': schedule = scheduleNone; break;
+         case 'reduce': schedule = scheduleReducePayment; break;
+         case 'reduce-plus': schedule = scheduleShortenTermReinvest; break;
+         case 'shorten': schedule = scheduleShortenTerm; break;
+       }
+       
+       if (!schedule) {
+         return { rows: [], totalPages: 0, currentPage: 1 };
+       }
+       const start = (currentPage - 1) * rowsPerPage;
+       const end = start + rowsPerPage;
+       return {
+         rows: schedule.rows.slice(start, end),
+         totalPages: Math.ceil(schedule.rows.length / rowsPerPage),
+         currentPage: currentPage
+       };
+     });
 
-    // Reset page when schedule changes
-    $effect(() => {
-      if (scheduleShortenTermReinvest && scheduleShortenTermReinvest.rows.length > 0) {
-        currentPage = 1;
-      }
-    });
+     // Reset page when schedule changes
+     $effect(() => {
+       if (scheduleShortenTermReinvest && scheduleShortenTermReinvest.rows.length > 0) {
+         currentPage = 1;
+       }
+     });
 
-  const loanTypeOptions = [
-    { value: 'annuity', label: 'Raty równe' },
-    { value: 'decreasing', label: 'Raty malejące' }
-  ];
+     // Reset page when strategy changes
+     $effect(() => {
+       selectedScheduleStrategy;
+       currentPage = 1;
+     });
 
-  const emergencyOptions = [
+   const loanTypeOptions = [
+     { value: 'annuity', label: 'Raty równe' },
+     { value: 'decreasing', label: 'Raty malejące' }
+   ];
+
+   const scheduleStrategyOptions = [
+     { value: 'none', label: 'Bez nadpłat' },
+     { value: 'reduce', label: 'Zmniejsz ratę' },
+     { value: 'reduce-plus', label: 'Zmniejsz ratę+' },
+     { value: 'shorten', label: 'Skróć okres' }
+   ];
+
+   const emergencyOptions = [
     { value: 'have', label: 'Mam poduszkę' },
     { value: 'build-fast', label: 'Buduję szybko (50% wolnej puli na nadpłatę)' },
     { value: 'build-slow-3y', label: 'Buduję powoli (15% wolnej puli na nadpłatę)' }
@@ -422,10 +440,17 @@
             'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień'][i]
   }));
 
-  function formatCurrency(value: Decimal | number): string {
-    const num = typeof value === 'number' ? value : value.toNumber();
-    return num.toLocaleString('pl-PL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-  }
+   function formatCurrency(value: Decimal | number): string {
+     const num = typeof value === 'number' ? value : value.toNumber();
+     return num.toLocaleString('pl-PL', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+   }
+
+   function getPaymentDate(monthOffset: number): string {
+     const date = new Date();
+     date.setMonth(date.getMonth() + monthOffset);
+     const monthNames = ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'];
+     return `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+   }
 
   // Theme icon components (SVG)
   const SunIcon = () => `<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="10" r="3"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="10" y1="1" x2="10" y2="3"/><line x1="10" y1="17" x2="10" y2="19"/><line x1="19" y1="10" x2="17" y2="10"/><line x1="3" y1="10" x2="1" y2="10"/><line x1="16.657" y1="3.343" x2="15.243" y2="4.757"/><line x1="4.757" y1="15.243" x2="3.343" y2="16.657"/><line x1="16.657" y1="16.657" x2="15.243" y2="15.243"/><line x1="4.757" y1="4.757" x2="3.343" y2="3.343"/></g></svg>`;
@@ -829,34 +854,44 @@
                scheduleWithOverpayment={scheduleShortenTermReinvest}
                scheduleWithoutOverpayment={scheduleNone}
              />
-          {:else if activeTab === 'schedule'}
-            <VintageCard title="Harmonogram spłat (skrócenie okresu)">
-               <div class="calculator__schedule-table-wrapper">
-                 <table class="calculator__schedule-table">
-                   <thead>
-                     <tr>
-                       <th>Miesiąc</th>
-                       <th>Rata</th>
-                       <th>Kapitał</th>
-                       <th>Odsetki</th>
-                       <th>Nadpłata</th>
-                       <th>Saldo</th>
-                     </tr>
-                   </thead>
-                   <tbody>
-                     {#each paginatedSchedule.rows as row}
-                       <tr>
-                         <td>{row.month}</td>
-                         <td>{formatCurrency(row.payment)} zł</td>
-                         <td>{formatCurrency(row.principal)} zł</td>
-                         <td>{formatCurrency(row.interest)} zł</td>
-                         <td>{formatCurrency(row.overpayment)} zł</td>
-                         <td>{formatCurrency(row.balanceAfter)} zł</td>
-                       </tr>
-                     {/each}
-                   </tbody>
-                 </table>
+           {:else if activeTab === 'schedule'}
+             <VintageCard title="Harmonogram spłat">
+               <div class="calculator__schedule-controls">
+                 <VintageSelect
+                   label="Strategia"
+                   name="scheduleStrategy"
+                   options={scheduleStrategyOptions}
+                   bind:value={selectedScheduleStrategy}
+                 />
                </div>
+                <div class="calculator__schedule-table-wrapper">
+                  <table class="calculator__schedule-table">
+                    <thead>
+                      <tr>
+                        <th>Miesiąc</th>
+                        <th>Data</th>
+                        <th>Rata</th>
+                        <th>Kapitał</th>
+                        <th>Odsetki</th>
+                        <th>Nadpłata</th>
+                        <th>Saldo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {#each paginatedSchedule.rows as row}
+                        <tr>
+                          <td>{row.month}</td>
+                          <td>{getPaymentDate(row.month)}</td>
+                          <td>{formatCurrency(row.payment)} zł</td>
+                          <td>{formatCurrency(row.principal)} zł</td>
+                          <td>{formatCurrency(row.interest)} zł</td>
+                          <td>{formatCurrency(row.overpayment)} zł</td>
+                          <td>{formatCurrency(row.balanceAfter)} zł</td>
+                        </tr>
+                      {/each}
+                    </tbody>
+                  </table>
+                </div>
                {#if paginatedSchedule.totalPages > 1}
                  <div class="calculator__pagination">
                    <button 
@@ -1413,12 +1448,18 @@
     border-bottom-color: var(--color-burgundy);
   }
 
-  .calculator__tab:focus {
-    outline: none;
-    box-shadow: var(--focus-ring);
-  }
+   .calculator__tab:focus {
+     outline: none;
+     box-shadow: var(--focus-ring);
+   }
 
-  /* Schedule Table */
+   /* Schedule Controls */
+   .calculator__schedule-controls {
+     margin-bottom: var(--space-md);
+     max-width: 250px;
+   }
+
+   /* Schedule Table */
   .calculator__schedule-table-wrapper {
     overflow-x: auto;
   }
