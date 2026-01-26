@@ -70,7 +70,7 @@
              const yBottom = u.bbox.top + u.bbox.height;
 
              ctx.save();
-             ctx.fillStyle = 'rgba(189, 149, 68, 0.08)';
+              ctx.fillStyle = 'rgba(189, 149, 68, 0.18)';
              ctx.fillRect(xScaleStart, yTop, xScaleEnd - xScaleStart, yBottom - yTop);
              ctx.restore();
            }
