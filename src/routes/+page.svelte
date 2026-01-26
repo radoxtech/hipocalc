@@ -532,6 +532,11 @@
     <p class="calculator__footer-disclaimer">
       Kalkulator ma charakter informacyjny. Skonsultuj decyzje finansowe z doradcą.
     </p>
+    <p class="calculator__footer-credits">
+      Dumnie stworzone przy pomocy 
+      <a href="https://github.com/ohmyopencode/opencode" target="_blank" rel="noopener">Oh My OpenCode</a>
+      i modeli Anthropic Claude Opus 4 & Sonnet 4.5
+    </p>
   </footer>
 </div>
 
@@ -846,6 +851,22 @@
     margin-top: var(--space-sm) !important;
     color: var(--color-ink-light);
     font-size: var(--text-xs);
+  }
+
+  .calculator__footer-credits {
+    margin-top: var(--space-xs) !important;
+    color: var(--color-ink-light);
+    font-size: var(--text-xs);
+    font-style: italic;
+  }
+
+  .calculator__footer-credits a {
+    color: var(--color-burgundy);
+    text-decoration: none;
+  }
+
+  .calculator__footer-credits a:hover {
+    text-decoration: underline;
   }
 
   /* Responsive */
