@@ -119,14 +119,17 @@ git push origin main --tags  # Only after PR merge!
 
 ## Deployment
 
-Deployment to GitHub Pages happens automatically when a **release is published**.
+Deployment to GitHub Pages happens automatically when changes are **pushed to main**.
 
 ### Trigger
-- `on: release` with `types: [published]`
-- NOT on push to main
+- `on: push` to `main` branch
+- Since main is protected (requires PR), this effectively means deployment after PR merge
 
 ### Workflow
-1. Merge PR to main
-2. Create and push tag: `git tag -a vX.Y.Z -m "Release" && git push origin --tags`
-3. Create release: `gh release create vX.Y.Z --title "vX.Y.Z" --notes "..."`
+1. Create feature/fix branch
+2. Push branch and create PR
+3. Merge PR to main
 4. GitHub Actions automatically deploys to Pages
+5. (Optional) Create tag and release for version tracking:
+   - `git tag -a vX.Y.Z -m "Release" && git push origin --tags`
+   - `gh release create vX.Y.Z --title "vX.Y.Z" --notes "..."`
