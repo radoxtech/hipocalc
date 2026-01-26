@@ -719,15 +719,6 @@
                 <td>{formatCurrency(scheduleNone.summary.totalInterest)} zł</td>
                 <td>—</td>
               </tr>
-              <tr class="calculator__results-row calculator__results-row--shorten">
-                <td class="calculator__strategy-name">
-                  <strong>Skróć okres</strong>
-                  <span class="calculator__strategy-hint">Szybciej spłać kredyt</span>
-                </td>
-                <td>{Math.ceil(scheduleShortenTerm.summary.totalMonths / 12)} lat ({scheduleShortenTerm.summary.totalMonths} mies.)</td>
-                <td>{formatCurrency(scheduleShortenTerm.summary.totalInterest)} zł</td>
-                <td class="calculator__savings">{formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTerm.summary.totalInterest))} zł</td>
-              </tr>
               <tr class="calculator__results-row calculator__results-row--reduce">
                 <td class="calculator__strategy-name">
                   <strong>Zmniejsz ratę</strong>
@@ -749,13 +740,32 @@
                 <td>{formatCurrency(scheduleShortenTermReinvest.summary.totalInterest)} zł</td>
                 <td class="calculator__savings">{formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTermReinvest.summary.totalInterest))} zł</td>
               </tr>
+              <tr class="calculator__results-row calculator__results-row--shorten">
+                <td class="calculator__strategy-name">
+                  <strong>Skróć okres</strong>
+                  <span class="calculator__strategy-hint">Rata stała, szybsza spłata</span>
+                </td>
+                <td>{Math.ceil(scheduleShortenTerm.summary.totalMonths / 12)} lat ({scheduleShortenTerm.summary.totalMonths} mies.)</td>
+                <td>{formatCurrency(scheduleShortenTerm.summary.totalInterest)} zł</td>
+                <td class="calculator__savings">{formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTerm.summary.totalInterest))} zł</td>
+              </tr>
             </tbody>
           </table>
-          <p class="calculator__strategy-explanation">
-            💡 <strong>Dlaczego „Zmniejsz ratę+" jest najlepsza?</strong> 
-            Spłacasz kredyt tak samo szybko jak przy „Skróć okres", ale bank obniża Twoją obowiązkową ratę. 
-            W razie utraty pracy lub spadku dochodów masz niższe zobowiązanie – to Twoje zabezpieczenie!
-          </p>
+          <div class="calculator__strategy-explanation">
+            <p>
+              <strong>💡 Dlaczego „Zmniejsz ratę+" jest najlepsza?</strong>
+            </p>
+            <p>
+              Co miesiąc bank obniża Twoją obowiązkową ratę. Ale Ty nadal wpłacasz tyle samo co wcześniej! 
+              Różnica idzie jako dodatkowa nadpłata → kapitał spada szybciej → rata znów maleje → możesz nadpłacać jeszcze więcej. 
+              <strong>To efekt kuli śnieżnej!</strong>
+            </p>
+            <p>
+              Efekt końcowy jest taki sam jak przy „Skróć okres", ale masz zabezpieczenie: 
+              w razie utraty pracy lub spadku dochodów Twoja <em>obowiązkowa</em> rata jest niska. 
+              Przy skróceniu okresu rata zostaje wysoka – i musisz ją płacić.
+            </p>
+          </div>
         </div>
          
          <!-- Tabs -->
@@ -1302,7 +1312,15 @@
     border-radius: var(--radius-sm);
     font-size: var(--text-sm);
     color: var(--color-ink);
-    line-height: 1.5;
+    line-height: 1.6;
+  }
+
+  .calculator__strategy-explanation p {
+    margin: 0 0 var(--space-sm) 0;
+  }
+
+  .calculator__strategy-explanation p:last-child {
+    margin-bottom: 0;
   }
 
    .calculator__savings {
