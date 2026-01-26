@@ -32,6 +32,10 @@
    let emergencyStatus = $state<'have' | 'build-fast' | 'build-slow-3y'>('have');
    let emergencyFundMonths = $state('6');
 
+   // Pagination state
+   let currentPage = $state(1);
+   const rowsPerPage = 50;
+
   // Load saved form data on mount (browser only)
   if (browser) {
       try {
@@ -231,12 +235,37 @@
      goldenMeanResult = calculateGoldenMean(input);
    }
 
-  function applyGoldenMeanRecommendation() {
-    if (goldenMeanResult) {
-      monthlyOverpayment = goldenMeanResult.recommendedOverpayment.toDecimalPlaces(0).toString();
-      calculate();
-    }
-  }
+   function applyGoldenMeanRecommendation() {
+     if (goldenMeanResult) {
+       monthlyOverpayment = goldenMeanResult.recommendedOverpayment.toDecimalPlaces(0).toString();
+       calculate();
+     }
+   }
+
+   // Pagination derived value
+   const paginatedSchedule = $derived.by(() => {
+     if (!scheduleShortenTerm) {
+       return {
+         rows: [],
+         totalPages: 0,
+         currentPage: 1
+       };
+     }
+     const start = (currentPage - 1) * rowsPerPage;
+     const end = start + rowsPerPage;
+     return {
+       rows: scheduleShortenTerm.rows.slice(start, end),
+       totalPages: Math.ceil(scheduleShortenTerm.rows.length / rowsPerPage),
+       currentPage: currentPage
+     };
+   });
+
+   // Reset page when schedule changes
+   $effect(() => {
+     if (scheduleShortenTerm && scheduleShortenTerm.rows.length > 0) {
+       currentPage = 1;
+     }
+   });
 
   const loanTypeOptions = [
     { value: 'annuity', label: 'Raty równe' },
@@ -606,32 +635,53 @@
             />
           {:else if activeTab === 'schedule'}
             <VintageCard title="Harmonogram spłat (skrócenie okresu)">
-              <div class="calculator__schedule-table-wrapper">
-                <table class="calculator__schedule-table">
-                  <thead>
-                    <tr>
-                      <th>Miesiąc</th>
-                      <th>Rata</th>
-                      <th>Kapitał</th>
-                      <th>Odsetki</th>
-                      <th>Nadpłata</th>
-                      <th>Saldo</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {#each scheduleShortenTerm.rows as row}
-                      <tr>
-                        <td>{row.month}</td>
-                        <td>{formatCurrency(row.payment)} zł</td>
-                        <td>{formatCurrency(row.principal)} zł</td>
-                        <td>{formatCurrency(row.interest)} zł</td>
-                        <td>{formatCurrency(row.overpayment)} zł</td>
-                        <td>{formatCurrency(row.balanceAfter)} zł</td>
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              </div>
+               <div class="calculator__schedule-table-wrapper">
+                 <table class="calculator__schedule-table">
+                   <thead>
+                     <tr>
+                       <th>Miesiąc</th>
+                       <th>Rata</th>
+                       <th>Kapitał</th>
+                       <th>Odsetki</th>
+                       <th>Nadpłata</th>
+                       <th>Saldo</th>
+                     </tr>
+                   </thead>
+                   <tbody>
+                     {#each paginatedSchedule.rows as row}
+                       <tr>
+                         <td>{row.month}</td>
+                         <td>{formatCurrency(row.payment)} zł</td>
+                         <td>{formatCurrency(row.principal)} zł</td>
+                         <td>{formatCurrency(row.interest)} zł</td>
+                         <td>{formatCurrency(row.overpayment)} zł</td>
+                         <td>{formatCurrency(row.balanceAfter)} zł</td>
+                       </tr>
+                     {/each}
+                   </tbody>
+                 </table>
+               </div>
+               {#if paginatedSchedule.totalPages > 1}
+                 <div class="calculator__pagination">
+                   <button 
+                     class="calculator__pagination-btn" 
+                     onclick={() => currentPage = Math.max(1, currentPage - 1)}
+                     disabled={currentPage === 1}
+                   >
+                     ← Poprzednia
+                   </button>
+                   <span class="calculator__pagination-info">
+                     Strona {currentPage} z {paginatedSchedule.totalPages}
+                   </span>
+                   <button 
+                     class="calculator__pagination-btn" 
+                     onclick={() => currentPage = Math.min(paginatedSchedule.totalPages, currentPage + 1)}
+                     disabled={currentPage === paginatedSchedule.totalPages}
+                   >
+                     Następna →
+                   </button>
+                 </div>
+               {/if}
             </VintageCard>
           {/if}
         </div>
@@ -988,13 +1038,52 @@
     text-align: left;
   }
 
-  .calculator__schedule-more {
-    text-align: center !important;
-    font-style: italic;
-    color: var(--color-ink-light);
-  }
+   .calculator__schedule-more {
+     text-align: center !important;
+     font-style: italic;
+     color: var(--color-ink-light);
+   }
 
-  /* Footer */
+   /* Pagination */
+   .calculator__pagination {
+     display: flex;
+     justify-content: center;
+     align-items: center;
+     gap: var(--space-md);
+     margin-top: var(--space-md);
+     padding: var(--space-md);
+   }
+
+   .calculator__pagination-btn {
+     padding: var(--space-xs) var(--space-md);
+     background: var(--color-cream);
+     border: 2px solid var(--color-gold);
+     color: var(--color-ink);
+     font-family: var(--font-body);
+     font-size: var(--text-sm);
+     cursor: pointer;
+     transition: all 0.2s;
+     border-radius: var(--radius-sm);
+   }
+
+   .calculator__pagination-btn:hover:not(:disabled) {
+     background: var(--color-gold);
+     color: var(--color-cream);
+   }
+
+   .calculator__pagination-btn:disabled {
+     opacity: 0.4;
+     cursor: not-allowed;
+   }
+
+   .calculator__pagination-info {
+     font-family: var(--font-body);
+     font-size: var(--text-sm);
+     color: var(--color-ink);
+     white-space: nowrap;
+   }
+
+   /* Footer */
   .calculator__footer {
     padding: var(--space-lg) var(--space-md);
     background: var(--color-parchment);
