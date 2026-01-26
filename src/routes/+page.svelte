@@ -612,7 +612,25 @@
     <!-- Golden Mean Banner -->
     {#if hasCalculated && !showGoldenMean}
       <button class="calculator__golden-banner" onclick={() => showGoldenMean = true}>
-        <span class="calculator__golden-banner-icon">&#x2728;</span>
+        <span class="calculator__golden-coin">
+          <svg viewBox="0 0 100 100" width="48" height="48">
+            <defs>
+              <linearGradient id="coinGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#FFD700"/>
+                <stop offset="50%" style="stop-color:#FFA500"/>
+                <stop offset="100%" style="stop-color:#B8860B"/>
+              </linearGradient>
+              <linearGradient id="coinShine" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:0.6"/>
+                <stop offset="50%" style="stop-color:#FFFFFF;stop-opacity:0"/>
+              </linearGradient>
+            </defs>
+            <circle cx="50" cy="50" r="46" fill="url(#coinGradient)" stroke="#8B6914" stroke-width="3"/>
+            <circle cx="50" cy="50" r="38" fill="none" stroke="#8B6914" stroke-width="1.5" opacity="0.5"/>
+            <ellipse cx="35" cy="35" rx="20" ry="15" fill="url(#coinShine)"/>
+            <text x="50" y="68" text-anchor="middle" font-size="48" font-weight="bold" fill="#8B6914" font-family="serif">$</text>
+          </svg>
+        </span>
         <span class="calculator__golden-banner-text">
           <strong>Wypróbuj Złoty Środek!</strong>
           <br />
@@ -1166,8 +1184,15 @@
     box-shadow: var(--focus-ring);
   }
 
-  .calculator__golden-banner-icon {
-    font-size: var(--text-2xl);
+  .calculator__golden-coin {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease;
+  }
+
+  .calculator__golden-banner:hover .calculator__golden-coin {
+    transform: rotate(15deg) scale(1.1);
   }
 
   .calculator__golden-banner-text {
