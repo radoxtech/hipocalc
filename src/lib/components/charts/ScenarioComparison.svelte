@@ -57,9 +57,19 @@
         : null;
 
       balanceNone.push(noneVal);
-      balanceShorten.push(shortenVal);
       balanceReduce.push(reduceVal);
-      balanceReducePlus.push(reducePlusVal);
+      
+      // Offset lines only when values are nearly identical (within 100 zł)
+      // This makes overlapping lines visible while keeping accurate values when different
+      const linesOverlap = reducePlusVal !== null && shortenVal !== null && 
+                           Math.abs(reducePlusVal - shortenVal) < 100;
+      
+      balanceReducePlus.push(reducePlusVal !== null 
+        ? reducePlusVal + (linesOverlap ? 2000 : 0) 
+        : null);
+      balanceShorten.push(shortenVal !== null 
+        ? shortenVal - (linesOverlap ? 2000 : 0) 
+        : null);
     }
 
     const data: uPlot.AlignedData = [
