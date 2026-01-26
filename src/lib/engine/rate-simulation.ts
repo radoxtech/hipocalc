@@ -203,7 +203,7 @@ export function generateScheduleForRate(
 function calculateBudgetReinvestSchedule(
   loan: Loan,
   overpayments: Overpayments,
-  scheduleWithoutOverpayment: Schedule,
+  _scheduleWithoutOverpayment: Schedule,
   input: RateSimulationInput
 ): Schedule {
   const rows: import('./types').ScheduleRow[] = [];
@@ -226,6 +226,8 @@ function calculateBudgetReinvestSchedule(
   let currentBudget = input.originalMonthlyPayment
     ? input.originalMonthlyPayment.plus(input.monthlyOverpayment)
     : overpayments.monthly.plus(currentAnnuityPayment);
+  
+  const hasFixedBudget = !!input.originalMonthlyPayment;
 
   while (balance.greaterThan(0.01) && month < loan.months * 2) {
     month++;
@@ -287,12 +289,12 @@ function calculateBudgetReinvestSchedule(
       balanceAfter: balance
     });
 
-    if (loan.type === 'annuity' && balance.greaterThan(0)) {
+    if (!hasFixedBudget && loan.type === 'annuity' && balance.greaterThan(0)) {
       const remainingMonths = loan.months - month;
       if (remainingMonths > 0) {
         currentAnnuityPayment = calculateAnnuityPayment(balance, monthlyRate, remainingMonths);
       }
-    } else if (loan.type === 'decreasing' && balance.greaterThan(0)) {
+    } else if (!hasFixedBudget && loan.type === 'decreasing' && balance.greaterThan(0)) {
       const remainingMonths = loan.months - month;
       if (remainingMonths > 0) {
         currentCapitalPortion = balance.dividedBy(remainingMonths);

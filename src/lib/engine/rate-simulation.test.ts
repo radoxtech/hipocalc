@@ -445,4 +445,84 @@ describe('fixed budget logic - prayer section', () => {
     expect(result.interestDifference.toNumber()).toBeGreaterThan(200000);
     expect(result.newResult.totalMonths).toBeLessThan(result.originalResult.totalMonths);
   });
+
+  describe('user bug report: 1% rate drop should save ~6 months', () => {
+    it('6.34% vs 5.34% without annual raise: saves ~6 months', () => {
+      const principal = new Decimal(787954);
+      const currentRate = 6.34;
+      const months = 346;
+      const monthlyOverpayment = new Decimal(4000);
+      const yearlyOverpayment = new Decimal(10000);
+      
+      const monthlyRate = new Decimal(currentRate).dividedBy(100).dividedBy(12);
+      const originalPayment = new Decimal(787954).times(monthlyRate).times(
+        new Decimal(1).plus(monthlyRate).pow(346)
+      ).dividedBy(
+        new Decimal(1).plus(monthlyRate).pow(346).minus(1)
+      );
+      
+      const input: RateSimulationInput = {
+        principal,
+        currentRate,
+        months,
+        loanType: 'annuity',
+        monthlyOverpayment,
+        yearlyOverpayment,
+        yearlyMonth: 3,
+        strategy: 'reduce-plus',
+        originalMonthlyPayment: originalPayment,
+        annualRaisePercent: 0
+      };
+      
+      const s1 = generateScheduleForRate(input, 6.34);
+      const s2 = generateScheduleForRate(input, 5.34);
+      
+      const monthsDiff = s1.summary.totalMonths - s2.summary.totalMonths;
+      
+      expect(monthsDiff).toBeGreaterThanOrEqual(5);
+      expect(s1.summary.totalMonths).toBeGreaterThan(100);
+      expect(s1.summary.totalMonths).toBeLessThan(110);
+    });
+    
+    it('with 4% annual raise, difference is smaller (budget grows)', () => {
+      const principal = new Decimal(787954);
+      const currentRate = 6.34;
+      const months = 346;
+      const monthlyOverpayment = new Decimal(4000);
+      const yearlyOverpayment = new Decimal(10000);
+      const annualRaisePercent = 4;
+      
+      const monthlyRate = new Decimal(currentRate).dividedBy(100).dividedBy(12);
+      const originalPayment = new Decimal(787954).times(monthlyRate).times(
+        new Decimal(1).plus(monthlyRate).pow(346)
+      ).dividedBy(
+        new Decimal(1).plus(monthlyRate).pow(346).minus(1)
+      );
+      
+      const input: RateSimulationInput = {
+        principal,
+        currentRate,
+        months,
+        loanType: 'annuity',
+        monthlyOverpayment,
+        yearlyOverpayment,
+        yearlyMonth: 3,
+        strategy: 'reduce-plus',
+        originalMonthlyPayment: originalPayment,
+        annualRaisePercent
+      };
+      
+      const s1 = generateScheduleForRate(input, 6.34);
+      const s2 = generateScheduleForRate(input, 5.34);
+      const s3 = generateScheduleForRate(input, 4.34);
+      
+      const diff1to2 = s1.summary.totalMonths - s2.summary.totalMonths;
+      const diff2to3 = s2.summary.totalMonths - s3.summary.totalMonths;
+      
+      expect(diff1to2).toBeGreaterThanOrEqual(3);
+      expect(diff2to3).toBeGreaterThanOrEqual(2);
+      
+      expect(s1.summary.totalMonths).toBeLessThan(95);
+    });
+  });
 });
