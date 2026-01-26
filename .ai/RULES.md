@@ -81,3 +81,38 @@ Types:
 - `refactor:` - code refactoring
 - `test:` - tests
 - `chore:` - maintenance
+
+---
+
+## CRITICAL: Main Branch Protection
+
+Since GitHub branch protection requires paid plans, this rule is ENFORCED BY AI AGENTS:
+
+### ABSOLUTE PROHIBITION
+```
+git push origin main        # ❌ FORBIDDEN
+git push origin main --tags # ❌ FORBIDDEN  
+git push --force            # ❌ FORBIDDEN
+```
+
+### ONLY ALLOWED
+```
+git push origin <feature-branch>  # ✅ OK
+git push -u origin feat/xyz       # ✅ OK
+```
+
+### Merge Workflow
+1. Push feature branch to origin
+2. Create PR via `gh pr create`
+3. Wait for owner approval
+4. Owner merges via GitHub UI or `gh pr merge`
+
+### After Merge (owner only)
+```
+git checkout main
+git pull origin main
+git tag -a vX.Y.Z -m "Release"
+git push origin main --tags  # Only after PR merge!
+```
+
+**AI agents must NEVER push directly to main. Always use PR workflow.**
