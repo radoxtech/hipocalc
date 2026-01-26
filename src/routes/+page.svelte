@@ -44,12 +44,9 @@
    let emergencyStatus = $state<'have' | 'build-fast' | 'build-slow-3y'>('have');
    let emergencyFundMonths = $state('6');
 
-   // Pagination state
-    let currentPage = $state(1);
-    const rowsPerPage = 50;
-
-     // Reinvest savings toggle (shorten-term strategy enhancement)
-     let reinvestSavings = $state(true);
+     // Pagination state
+     let currentPage = $state(1);
+     const rowsPerPage = 50;
 
     // Load saved form data on mount (browser only)
     if (browser) {
@@ -69,7 +66,6 @@
             fixedExpenses = data.fixedExpenses ?? fixedExpenses;
             emergencyStatus = data.emergencyStatus ?? emergencyStatus;
             emergencyFundMonths = data.emergencyFundMonths ?? emergencyFundMonths;
-            reinvestSavings = data.reinvestSavings ?? reinvestSavings;
             durationMode = data.durationMode ?? durationMode;
           }
         } catch {
@@ -128,7 +124,6 @@
             fixedExpenses,
             emergencyStatus,
             emergencyFundMonths,
-            reinvestSavings,
             durationMode
           };
           localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -166,7 +161,7 @@
         // Access all reactive state to track dependencies
         principal; years; months; rate; loanType; monthlyOverpayment;
         yearlyOverpayment; yearlyMonth; netIncome; fixedExpenses; emergencyStatus; emergencyFundMonths;
-        reinvestSavings; durationMode;
+        durationMode;
         saveFormData();
       });
   let goldenMeanResult = $state<GoldenMeanOutput | null>(null);
@@ -178,13 +173,6 @@
     let scheduleShortenTermReinvest = $state<Schedule | null>(null);
     let hasCalculated = $state(false);
     let activeTab = $state<'comparison' | 'balance' | 'savings' | 'schedule'>('comparison');
-
-    // Use reinvest schedule if enabled, otherwise use regular shorten-term
-    const activeShortenSchedule = $derived(
-      reinvestSavings && scheduleShortenTermReinvest 
-        ? scheduleShortenTermReinvest 
-        : scheduleShortenTerm
-    );
 
   // Validation
   let errors = $state<Record<string, string>>({});
@@ -380,9 +368,9 @@
      }
    }
 
-    // Pagination derived value
+    // Pagination derived value (uses "Reduce Payment Plus" strategy)
     const paginatedSchedule = $derived.by(() => {
-      if (!activeShortenSchedule) {
+      if (!scheduleShortenTermReinvest) {
         return {
           rows: [],
           totalPages: 0,
@@ -392,15 +380,15 @@
       const start = (currentPage - 1) * rowsPerPage;
       const end = start + rowsPerPage;
       return {
-        rows: activeShortenSchedule.rows.slice(start, end),
-        totalPages: Math.ceil(activeShortenSchedule.rows.length / rowsPerPage),
+        rows: scheduleShortenTermReinvest.rows.slice(start, end),
+        totalPages: Math.ceil(scheduleShortenTermReinvest.rows.length / rowsPerPage),
         currentPage: currentPage
       };
     });
 
     // Reset page when schedule changes
     $effect(() => {
-      if (activeShortenSchedule && activeShortenSchedule.rows.length > 0) {
+      if (scheduleShortenTermReinvest && scheduleShortenTermReinvest.rows.length > 0) {
         currentPage = 1;
       }
     });
@@ -677,42 +665,46 @@
     {/if}
 
     <!-- Results -->
-    {#if hasCalculated && scheduleNone && scheduleShortenTerm && scheduleReducePayment && activeShortenSchedule}
+    {#if hasCalculated && scheduleNone && scheduleShortenTerm && scheduleReducePayment && scheduleShortenTermReinvest}
       <SectionDivider variant="ornate" />
 
       <section class="calculator__results">
-        <h2>Wyniki symulacji</h2>
+        <h2>Wyniki symulacji - 4 strategie spłaty</h2>
 
-        <!-- Summary Cards -->
-        <div class="calculator__summary-cards">
+        <!-- Summary Cards - 4 strategies -->
+        <div class="calculator__summary-cards calculator__summary-cards--four">
+          <!-- Strategy 1: No overpayment -->
           <div class="calculator__summary-card calculator__summary-card--none">
             <h3>Bez nadpłat</h3>
+            <p class="calculator__strategy-hint">Spłata podstawowa</p>
             <dl>
               <dt>Okres spłaty</dt>
               <dd>{Math.ceil(scheduleNone.summary.totalMonths / 12)} lat ({scheduleNone.summary.totalMonths} mies.)</dd>
               <dt>Suma odsetek</dt>
               <dd>{formatCurrency(scheduleNone.summary.totalInterest)} zł</dd>
-              <dt>Łącznie do spłaty</dt>
-              <dd>{formatCurrency(scheduleNone.summary.totalPaid)} zł</dd>
             </dl>
           </div>
 
+          <!-- Strategy 2: Shorten term -->
           <div class="calculator__summary-card calculator__summary-card--shorten">
              <h3>Skróć okres</h3>
+             <p class="calculator__strategy-hint">Szybciej spłać kredyt</p>
              <dl>
                <dt>Okres spłaty</dt>
-               <dd>{Math.ceil(activeShortenSchedule.summary.totalMonths / 12)} lat ({activeShortenSchedule.summary.totalMonths} mies.)</dd>
+               <dd>{Math.ceil(scheduleShortenTerm.summary.totalMonths / 12)} lat ({scheduleShortenTerm.summary.totalMonths} mies.)</dd>
                <dt>Suma odsetek</dt>
-               <dd>{formatCurrency(activeShortenSchedule.summary.totalInterest)} zł</dd>
+               <dd>{formatCurrency(scheduleShortenTerm.summary.totalInterest)} zł</dd>
                <dt>Oszczędność</dt>
                <dd class="calculator__savings">
-                 {formatCurrency(scheduleNone.summary.totalInterest.minus(activeShortenSchedule.summary.totalInterest))} zł
+                 {formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTerm.summary.totalInterest))} zł
                </dd>
              </dl>
           </div>
 
+           <!-- Strategy 3: Reduce payment -->
            <div class="calculator__summary-card calculator__summary-card--reduce">
              <h3>Zmniejsz ratę</h3>
+             <p class="calculator__strategy-hint">Niższe miesięczne obciążenie</p>
              <dl>
                <dt>Okres spłaty</dt>
                <dd>{Math.ceil(scheduleReducePayment.summary.totalMonths / 12)} lat ({scheduleReducePayment.summary.totalMonths} mies.)</dd>
@@ -725,37 +717,23 @@
              </dl>
            </div>
 
-           {#if reinvestSavings && scheduleShortenTermReinvest}
-             <div class="calculator__summary-card calculator__summary-card--reinvest">
-               <h3>Skróć okres + Reinwestuj</h3>
-               <dl>
-                 <dt>Okres spłaty</dt>
-                 <dd>{Math.ceil(scheduleShortenTermReinvest.summary.totalMonths / 12)} lat ({scheduleShortenTermReinvest.summary.totalMonths} mies.)</dd>
-                 <dt>Suma odsetek</dt>
-                 <dd>{formatCurrency(scheduleShortenTermReinvest.summary.totalInterest)} zł</dd>
-                 <dt>Oszczędność</dt>
-                 <dd class="calculator__savings">
-                   {formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTermReinvest.summary.totalInterest))} zł
-                 </dd>
-               </dl>
-             </div>
-           {/if}
-         </div>
-
-         <!-- Reinvest Savings Toggle -->
-         <div class="calculator__reinvest-toggle">
-           <label>
-             <input 
-               type="checkbox" 
-               bind:checked={reinvestSavings}
-             />
-             <span>Nadpłacaj więcej - reinwestuj oszczędności z odsetek</span>
-           </label>
-           {#if reinvestSavings}
-             <p class="calculator__reinvest-note">
-               💡 Dodatkowa nadpłata z oszczędności skróci kredyt jeszcze bardziej
+           <!-- Strategy 4: Reduce payment plus (reinvest) -->
+           <div class="calculator__summary-card calculator__summary-card--reinvest">
+             <h3>Zmniejsz ratę plus</h3>
+             <p class="calculator__strategy-hint" title="Zmniejsza ratę i reinwestuje zaoszczędzoną różnicę">
+               Zmniejsza + reinwestuje 💡
              </p>
-           {/if}
+             <dl>
+               <dt>Okres spłaty</dt>
+               <dd>{Math.ceil(scheduleShortenTermReinvest.summary.totalMonths / 12)} lat ({scheduleShortenTermReinvest.summary.totalMonths} mies.)</dd>
+               <dt>Suma odsetek</dt>
+               <dd>{formatCurrency(scheduleShortenTermReinvest.summary.totalInterest)} zł</dd>
+               <dt>Oszczędność</dt>
+               <dd class="calculator__savings">
+                 {formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTermReinvest.summary.totalInterest))} zł
+               </dd>
+             </dl>
+           </div>
          </div>
          
          <!-- Tabs -->
@@ -805,12 +783,13 @@
               {scheduleNone}
               {scheduleShortenTerm}
               {scheduleReducePayment}
+              scheduleReducePlus={scheduleShortenTermReinvest}
             />
            {:else if activeTab === 'balance'}
-             <BalanceChart schedule={activeShortenSchedule} title="Spadek salda - strategia skrócenia okresu" />
+             <BalanceChart schedule={scheduleShortenTermReinvest} title="Spadek salda - strategia zmniejsz ratę plus" />
            {:else if activeTab === 'savings'}
              <SavingsChart
-               scheduleWithOverpayment={activeShortenSchedule}
+               scheduleWithOverpayment={scheduleShortenTermReinvest}
                scheduleWithoutOverpayment={scheduleNone}
              />
           {:else if activeTab === 'schedule'}
@@ -1161,9 +1140,26 @@
 
   .calculator__summary-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(3, 1fr);
     gap: var(--space-md);
-    margin-bottom: var(--space-xl);
+    margin-bottom: var(--space-lg);
+  }
+
+  .calculator__summary-cards--four {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  @media (max-width: 1400px) {
+    .calculator__summary-cards--four {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .calculator__summary-cards,
+    .calculator__summary-cards--four {
+      grid-template-columns: 1fr;
+    }
   }
 
   .calculator__summary-card {
@@ -1186,8 +1182,16 @@
    }
 
    .calculator__summary-card--reinvest {
-     border-left-color: #16A34A;
+     border-left-color: #7B2D9E;
    }
+
+  .calculator__strategy-hint {
+    font-size: var(--text-sm);
+    color: var(--color-ink-light);
+    opacity: 0.9;
+    margin: 0 0 var(--space-sm) 0;
+    font-style: italic;
+  }
 
   .calculator__summary-card h3 {
     font-family: var(--font-heading);

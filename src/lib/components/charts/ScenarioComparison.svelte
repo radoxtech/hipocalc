@@ -8,6 +8,7 @@
     scheduleNone: Schedule;
     scheduleShortenTerm: Schedule;
     scheduleReducePayment: Schedule;
+    scheduleReducePlus: Schedule;
     title?: string;
   }
 
@@ -15,7 +16,8 @@
     scheduleNone,
     scheduleShortenTerm,
     scheduleReducePayment,
-    title = 'Porównanie scenariuszy'
+    scheduleReducePlus,
+    title = 'Porównanie 4 strategii spłaty'
   }: Props = $props();
 
   let chartContainer: HTMLDivElement;
@@ -28,13 +30,15 @@
     const maxMonths = Math.max(
       scheduleNone.rows.length,
       scheduleShortenTerm.rows.length,
-      scheduleReducePayment.rows.length
+      scheduleReducePayment.rows.length,
+      scheduleReducePlus.rows.length
     );
 
     const months: number[] = [];
     const balanceNone: (number | null)[] = [];
     const balanceShorten: (number | null)[] = [];
     const balanceReduce: (number | null)[] = [];
+    const balanceReducePlus: (number | null)[] = [];
 
     for (let i = 0; i < maxMonths; i++) {
       months.push(i + 1);
@@ -54,13 +58,19 @@
           ? scheduleReducePayment.rows[i].balanceAfter.toNumber()
           : null
       );
+      balanceReducePlus.push(
+        i < scheduleReducePlus.rows.length
+          ? scheduleReducePlus.rows[i].balanceAfter.toNumber()
+          : null
+      );
     }
 
     const data: uPlot.AlignedData = [
       months,
       balanceNone,
       balanceShorten,
-      balanceReduce
+      balanceReduce,
+      balanceReducePlus
     ];
 
     const opts: uPlot.Options = {
@@ -92,19 +102,24 @@
         {},
         {
           label: 'Bez nadpłat',
-          stroke: '#6B7280', // Gray
+          stroke: '#6B7280',
           width: 2,
           dash: [5, 5]
         },
         {
           label: 'Skróć okres',
-          stroke: '#A0201E', // Brighter burgundy for visibility
+          stroke: '#A0201E',
           width: 3
         },
         {
           label: 'Zmniejsz ratę',
-          stroke: '#1E40AF', // Blue
-          width: 2
+          stroke: '#1E40AF',
+          width: 3
+        },
+        {
+          label: 'Zmniejsz ratę plus',
+          stroke: '#7B2D9E',
+          width: 3
         }
       ],
       legend: {
@@ -144,7 +159,7 @@
   });
 
   $effect(() => {
-    if (scheduleNone && scheduleShortenTerm && scheduleReducePayment && chartContainer) {
+    if (scheduleNone && scheduleShortenTerm && scheduleReducePayment && scheduleReducePlus && chartContainer) {
       chart?.destroy();
       createChart();
     }
@@ -191,6 +206,20 @@
         <dt>Oszczędność</dt>
         <dd class="scenario-comparison__savings">
           {scheduleNone.summary.totalInterest.minus(scheduleReducePayment.summary.totalInterest).toDecimalPlaces(0).toNumber().toLocaleString('pl-PL')} zł
+        </dd>
+      </dl>
+    </div>
+
+    <div class="scenario-comparison__card scenario-comparison__card--reduceplus">
+      <h4>Zmniejsz ratę plus</h4>
+      <dl>
+        <dt>Czas spłaty</dt>
+        <dd>{scheduleReducePlus.summary.totalMonths} mies.</dd>
+        <dt>Suma odsetek</dt>
+        <dd>{scheduleReducePlus.summary.totalInterest.toDecimalPlaces(0).toNumber().toLocaleString('pl-PL')} zł</dd>
+        <dt>Oszczędność</dt>
+        <dd class="scenario-comparison__savings">
+          {scheduleNone.summary.totalInterest.minus(scheduleReducePlus.summary.totalInterest).toDecimalPlaces(0).toNumber().toLocaleString('pl-PL')} zł
         </dd>
       </dl>
     </div>
@@ -242,6 +271,10 @@
 
   .scenario-comparison__card--reduce {
     border-left-color: #1E40AF;
+  }
+
+  .scenario-comparison__card--reduceplus {
+    border-left-color: #7B2D9E;
   }
 
   .scenario-comparison__card h4 {
