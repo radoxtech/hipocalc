@@ -1,25 +1,25 @@
-/* Design Tokens - Vintage Bank Style (1700-1850) */
+/* Design Tokens - Modern Financial Style */
 :root {
-  /* Colors */
-  --color-burgundy: #730000;
-  --color-burgundy-light: #9B000A;
-  --color-burgundy-dark: #520000;
-  --color-gold: #BD9544;
-  --color-gold-light: #D4B06A;
-  --color-gold-decorative: #FFBD00; /* NOT for text - decorative only */
-  --color-cream: #F4F1E4;
-  --color-parchment: #F3EFD0;
-  --color-parchment-dark: #E8E3C8;
-  --color-ink: #1C1C1E;
-  --color-ink-light: #4A4A4C;
-  --color-success: #2E7D32;
-  --color-error: #C62828;
-  --color-warning: #E65100;
+  /* Colors - Clean & Professional */
+  --color-burgundy: #8B1538;
+  --color-burgundy-light: #A8244A;
+  --color-burgundy-dark: #6B0F2A;
+  --color-gold: #D4AF37;
+  --color-gold-light: #E5C962;
+  --color-gold-decorative: #F4D03F;
+  --color-cream: #FFFFFF;
+  --color-parchment: #F8F9FA;
+  --color-parchment-dark: #E9ECEF;
+  --color-ink: #212529;
+  --color-ink-light: #6C757D;
+  --color-success: #198754;
+  --color-error: #DC3545;
+  --color-warning: #FD7E14;
 
-  /* Typography */
-  --font-heading: 'Playfair Display', 'Georgia', serif;
-  --font-body: 'Cormorant', 'Times New Roman', serif;
-  --font-mono: 'JetBrains Mono', 'Consolas', monospace;
+  /* Typography - Modern & Readable */
+  --font-heading: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
 
   /* Font sizes */
   --text-xs: 0.75rem;
@@ -62,13 +62,16 @@
   --z-tooltip: 300;
 }
 
-/* Dark mode support (optional, respects system preference) */
+/* Dark mode support */
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-cream: #1C1C1E;
-    --color-parchment: #2A2A2C;
-    --color-parchment-dark: #3A3A3C;
-    --color-ink: #F4F1E4;
-    --color-ink-light: #D0CCC0;
+    --color-cream: #1A1D23;
+    --color-parchment: #22252B;
+    --color-parchment-dark: #2C2F36;
+    --color-ink: #E8EAED;
+    --color-ink-light: #9AA0A6;
+    --color-burgundy: #D4536E;
+    --color-burgundy-light: #E8738A;
+    --color-burgundy-dark: #B83D58;
   }
 }
