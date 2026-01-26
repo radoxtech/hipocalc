@@ -756,14 +756,19 @@
               <strong>💡 Dlaczego „Zmniejsz ratę+" jest najlepsza?</strong>
             </p>
             <p>
-              Co miesiąc bank obniża Twoją obowiązkową ratę. Ale Ty nadal wpłacasz tyle samo co wcześniej! 
-              Różnica idzie jako dodatkowa nadpłata → kapitał spada szybciej → rata znów maleje → możesz nadpłacać jeszcze więcej. 
-              <strong>To efekt kuli śnieżnej!</strong>
+              Przykład: Twoja rata to 3000 zł, nadpłacasz 1000 zł miesięcznie. Po nadpłacie bank obniża ratę do 2800 zł.
+              Ale Ty dalej wpłacasz 4000 zł (rata + nadpłata)! Skąd dodatkowe 200 zł? <strong>Z różnicy między starą a nową ratą.</strong>
+              Kapitał spada szybciej → rata znów maleje → możesz nadpłacać jeszcze więcej. <strong>To efekt kuli śnieżnej!</strong>
             </p>
             <p>
-              Efekt końcowy jest taki sam jak przy „Skróć okres", ale masz zabezpieczenie: 
-              w razie utraty pracy lub spadku dochodów Twoja <em>obowiązkowa</em> rata jest niska. 
-              Przy skróceniu okresu rata zostaje wysoka – i musisz ją płacić.
+              Efekt końcowy jest identyczny jak przy „Skróć okres", ale masz zabezpieczenie: 
+              w razie utraty pracy Twoja <em>obowiązkowa</em> rata jest niska. 
+              Przy skróceniu okresu rata zostaje wysoka – i musisz ją płacić bez względu na sytuację.
+            </p>
+            <p class="calculator__strategy-myth">
+              ⚠️ <strong>Popularny mit:</strong> Wiele osób błędnie uważa, że „Skróć okres" jest korzystniejszy, 
+              bo zapominają o reinwestowaniu zaoszczędzonej różnicy. Jeśli konsekwentnie wpłacasz tę samą kwotę, 
+              obie strategie dają identyczny czas spłaty i oszczędności – ale „Zmniejsz ratę+" daje Ci elastyczność!
             </p>
           </div>
         </div>
@@ -1321,6 +1326,15 @@
 
   .calculator__strategy-explanation p:last-child {
     margin-bottom: 0;
+  }
+
+  .calculator__strategy-myth {
+    margin-top: var(--space-md) !important;
+    padding: var(--space-sm) var(--space-md);
+    background: rgba(230, 126, 34, 0.1);
+    border-left: 3px solid #E67E22;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-xs);
   }
 
    .calculator__savings {

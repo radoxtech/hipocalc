@@ -43,26 +43,28 @@
     for (let i = 0; i < maxMonths; i++) {
       months.push(i + 1);
 
-      balanceNone.push(
-        i < scheduleNone.rows.length
-          ? scheduleNone.rows[i].balanceAfter.toNumber()
-          : null
-      );
-      balanceShorten.push(
-        i < scheduleShortenTerm.rows.length
-          ? scheduleShortenTerm.rows[i].balanceAfter.toNumber()
-          : null
-      );
-      balanceReduce.push(
-        i < scheduleReducePayment.rows.length
-          ? scheduleReducePayment.rows[i].balanceAfter.toNumber() * 1.001
-          : null
-      );
-      balanceReducePlus.push(
-        i < scheduleReducePlus.rows.length
-          ? scheduleReducePlus.rows[i].balanceAfter.toNumber() * 1.002
-          : null
-      );
+      const noneVal = i < scheduleNone.rows.length
+        ? scheduleNone.rows[i].balanceAfter.toNumber()
+        : null;
+      const shortenVal = i < scheduleShortenTerm.rows.length
+        ? scheduleShortenTerm.rows[i].balanceAfter.toNumber()
+        : null;
+      const reduceVal = i < scheduleReducePayment.rows.length
+        ? scheduleReducePayment.rows[i].balanceAfter.toNumber()
+        : null;
+      const reducePlusVal = i < scheduleReducePlus.rows.length
+        ? scheduleReducePlus.rows[i].balanceAfter.toNumber()
+        : null;
+
+      balanceNone.push(noneVal);
+      balanceShorten.push(shortenVal);
+      
+      // Offset lines when values overlap for visibility
+      const reducePlusOffset = (reducePlusVal !== null && shortenVal !== null && Math.abs(reducePlusVal - shortenVal) < 100) ? 500 : 0;
+      const reduceOffset = (reduceVal !== null && shortenVal !== null && Math.abs(reduceVal - shortenVal) < 100) ? 1000 : 0;
+      
+      balanceReduce.push(reduceVal !== null ? reduceVal + reduceOffset : null);
+      balanceReducePlus.push(reducePlusVal !== null ? reducePlusVal + reducePlusOffset : null);
     }
 
     const data: uPlot.AlignedData = [
