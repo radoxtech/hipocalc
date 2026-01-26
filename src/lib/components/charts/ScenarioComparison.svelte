@@ -58,21 +58,16 @@
 
       balanceNone.push(noneVal);
       balanceShorten.push(shortenVal);
-      
-      // Offset lines when values overlap for visibility
-      const reducePlusOffset = (reducePlusVal !== null && shortenVal !== null && Math.abs(reducePlusVal - shortenVal) < 100) ? 500 : 0;
-      const reduceOffset = (reduceVal !== null && shortenVal !== null && Math.abs(reduceVal - shortenVal) < 100) ? 1000 : 0;
-      
-      balanceReduce.push(reduceVal !== null ? reduceVal + reduceOffset : null);
-      balanceReducePlus.push(reducePlusVal !== null ? reducePlusVal + reducePlusOffset : null);
+      balanceReduce.push(reduceVal);
+      balanceReducePlus.push(reducePlusVal);
     }
 
     const data: uPlot.AlignedData = [
       months,
       balanceNone,
-      balanceShorten,
       balanceReduce,
-      balanceReducePlus
+      balanceReducePlus,
+      balanceShorten
     ];
 
     const opts: uPlot.Options = {
@@ -113,12 +108,6 @@
           value: (_u: uPlot, v: number) => v ? `${formatCurrency(v)} zł` : '—'
         },
         {
-          label: 'Skróć okres',
-          stroke: '#A0201E',
-          width: 3,
-          value: (_u: uPlot, v: number) => v ? `${formatCurrency(v)} zł` : '—'
-        },
-        {
           label: 'Zmniejsz ratę',
           stroke: '#1E40AF',
           width: 3,
@@ -128,6 +117,13 @@
           label: 'Zmniejsz ratę+',
           stroke: '#7B2D9E',
           width: 3,
+          value: (_u: uPlot, v: number) => v ? `${formatCurrency(v)} zł` : '—'
+        },
+        {
+          label: 'Skróć okres',
+          stroke: '#A0201E',
+          width: 3,
+          dash: [8, 4],
           value: (_u: uPlot, v: number) => v ? `${formatCurrency(v)} zł` : '—'
         }
       ],
@@ -191,20 +187,6 @@
       </dl>
     </div>
 
-    <div class="scenario-comparison__card scenario-comparison__card--shorten">
-      <h4>Skróć okres</h4>
-      <dl>
-        <dt>Czas spłaty</dt>
-        <dd>{scheduleShortenTerm.summary.totalMonths} mies.</dd>
-        <dt>Suma odsetek</dt>
-        <dd>{scheduleShortenTerm.summary.totalInterest.toDecimalPlaces(0).toNumber().toLocaleString('pl-PL')} zł</dd>
-        <dt>Oszczędność</dt>
-        <dd class="scenario-comparison__savings">
-          {scheduleNone.summary.totalInterest.minus(scheduleShortenTerm.summary.totalInterest).toDecimalPlaces(0).toNumber().toLocaleString('pl-PL')} zł
-        </dd>
-      </dl>
-    </div>
-
     <div class="scenario-comparison__card scenario-comparison__card--reduce">
       <h4>Zmniejsz ratę</h4>
       <dl>
@@ -229,6 +211,20 @@
         <dt>Oszczędność</dt>
         <dd class="scenario-comparison__savings">
           {scheduleNone.summary.totalInterest.minus(scheduleReducePlus.summary.totalInterest).toDecimalPlaces(0).toNumber().toLocaleString('pl-PL')} zł
+        </dd>
+      </dl>
+    </div>
+
+    <div class="scenario-comparison__card scenario-comparison__card--shorten">
+      <h4>Skróć okres</h4>
+      <dl>
+        <dt>Czas spłaty</dt>
+        <dd>{scheduleShortenTerm.summary.totalMonths} mies.</dd>
+        <dt>Suma odsetek</dt>
+        <dd>{scheduleShortenTerm.summary.totalInterest.toDecimalPlaces(0).toNumber().toLocaleString('pl-PL')} zł</dd>
+        <dt>Oszczędność</dt>
+        <dd class="scenario-comparison__savings">
+          {scheduleNone.summary.totalInterest.minus(scheduleShortenTerm.summary.totalInterest).toDecimalPlaces(0).toNumber().toLocaleString('pl-PL')} zł
         </dd>
       </dl>
     </div>
