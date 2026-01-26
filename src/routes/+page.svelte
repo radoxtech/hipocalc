@@ -24,7 +24,7 @@
   let durationMode = $state<'years' | 'months'>('years');
 
   // Theme state
-  let theme = $state<'light' | 'dark' | 'auto'>('auto');
+  let theme = $state<'light' | 'dark'>('light');
 
    // Duration mode helpers
    const durationValue = $derived(durationMode === 'years' ? years : months);
@@ -79,8 +79,11 @@
      // Load theme preference
      try {
        const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-       if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'auto') {
+       if (savedTheme === 'light' || savedTheme === 'dark') {
          theme = savedTheme;
+       } else if (savedTheme === 'auto') {
+         // Migrate old 'auto' to system preference
+         theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
        }
        applyTheme(theme);
      } catch {
@@ -135,23 +138,15 @@
       }
 
   // Apply theme to document
-  function applyTheme(selectedTheme: 'light' | 'dark' | 'auto') {
+  function applyTheme(selectedTheme: 'light' | 'dark') {
     if (!browser) return;
     const html = document.documentElement;
-    
-    if (selectedTheme === 'auto') {
-      html.removeAttribute('data-theme');
-    } else {
-      html.setAttribute('data-theme', selectedTheme);
-    }
+    html.setAttribute('data-theme', selectedTheme);
   }
 
-   // Toggle theme: auto -> light -> dark -> auto
+   // Toggle theme: light <-> dark
    function toggleTheme() {
-     const themes: ('light' | 'dark' | 'auto')[] = ['auto', 'light', 'dark'];
-     const currentIndex = themes.indexOf(theme);
-     const nextIndex = (currentIndex + 1) % themes.length;
-     theme = themes[nextIndex];
+     theme = theme === 'light' ? 'dark' : 'light';
      try {
        localStorage.setItem(THEME_STORAGE_KEY, theme);
      } catch {
@@ -460,10 +455,8 @@
     >
       {#if theme === 'light'}
         {@html SunIcon()}
-      {:else if theme === 'dark'}
-        {@html MoonIcon()}
       {:else}
-        {@html AutoIcon()}
+        {@html MoonIcon()}
       {/if}
     </button>
   </header>
@@ -976,10 +969,20 @@
 
    .calculator__construction-banner p {
      margin: 0;
-     color: var(--color-ink);
+     color: #856404;
      font-weight: 600;
      font-family: var(--font-body);
      font-size: var(--text-base);
+   }
+
+   /* Dark mode construction banner */
+   :global([data-theme="dark"]) .calculator__construction-banner {
+     background: #664D00;
+     border-left-color: var(--color-gold);
+   }
+
+   :global([data-theme="dark"]) .calculator__construction-banner p {
+     color: #FFF3CD;
    }
 
   .calculator__form-grid {
