@@ -187,6 +187,7 @@
      // Modlitwa o Spadek Stóp state
      let showPrayerSection = $state(false);
      let prayerStrategy = $state<'none' | 'reduce' | 'reduce-plus' | 'shorten'>('reduce-plus');
+     let lastPrayerStrategy = $state<'none' | 'reduce' | 'reduce-plus' | 'shorten'>('reduce-plus');
      let prayerResult = $state<{
        type: 'prayer' | 'sin';
        level: 1 | 2 | 3;
@@ -196,6 +197,20 @@
        difference: Decimal;
        newRate: number;
      } | null>(null);
+
+     // Recalculate prayer result when strategy changes
+     $effect(() => {
+       if (prayerResult && hasCalculated && prayerStrategy !== lastPrayerStrategy) {
+         lastPrayerStrategy = prayerStrategy;
+         const currentType = prayerResult.type;
+         const currentLevel = prayerResult.level;
+         if (currentType === 'prayer') {
+           pray(currentLevel);
+         } else {
+           sin(currentLevel);
+         }
+       }
+     });
 
      function getScheduleForStrategy(strategy: 'none' | 'reduce' | 'reduce-plus' | 'shorten'): Schedule | null {
        switch (strategy) {
