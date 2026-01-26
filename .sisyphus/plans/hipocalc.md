@@ -1,0 +1,1228 @@
+# HipoCalc - Kalkulator Nadpłaty Kredytu Hipotecznego
+
+## Context
+
+### Original Request
+Kalkulator nadpłaty kredytu hipotecznego w Svelte z hostingiem na GitHub Pages. Funkcje:
+- Symulacja spadku raty przy nadpłatach (rocznych i miesięcznych)
+- Efekt kaskadowy (niższa rata = więcej do nadpłaty)
+- Porównanie strategii: skrócenie okresu vs zmniejszenie raty
+- Algorytm "Złoty Środek" - optymalna nadpłata bez rezygnacji z przyjemności
+- Szata graficzna w stylu banku z lat 1700-1850 + nowoczesny UX 2025
+- localStorage do zapamiętywania obliczeń
+
+### Interview Summary
+
+**Key Discussions**:
+- **Typy rat**: Obsługa OBU typów (równe i malejące) z możliwością porównania
+- **Wizualizacje**: 4 typy - tabela harmonogramu, wykres salda, porównanie scenariuszy (3 linie), wykres oszczędności
+- **Złoty Środek**: Algorytm BEZ suwaka - sam wylicza optymalny podział. Cel: zapobiec nadmiernemu nadpłacaniu
+- **Poduszka bezpieczeństwa**: 6 mies. domyślnie, opcje: "mam" / "zbuduję szybko" / "zbuduję powoli (3 lata)"
+- **Prowizje**: Standard w Polsce = brak (opcjonalne pole dla starszych umów)
+- **Język**: Tylko polski
+- **Testy**: TDD z Vitest
+
+**Research Findings**:
+- WIRON zastąpił WIBOR w Polsce (2025-2026)
+- Formuła rat równych: `R = K × (r / (1 - (1 + r)^(-n)))`
+- Formuła rat malejących: `R_n = K/n + S_n × r`
+- uPlot (15KB) 4x mniejszy od Chart.js (65KB)
+
+### Metis Review
+
+**Identified Gaps** (addressed):
+- Decimal.js dla obliczeń pieniężnych (unikamy błędów float)
+- uPlot zamiast Chart.js (mniejszy bundle)
+- Accessible tables dla każdego wykresu
+- Definiuj Złoty Środek wzór w testach PRZED UI
+
+---
+
+## Domain Specification (CRITICAL)
+
+### Data Types (TypeScript interfaces)
+
+```typescript
+// src/lib/engine/types.ts
+
+/** Dane wejściowe kredytu */
+interface Loan {
+  principal: Decimal;           // Kwota kredytu (zł)
+  annualRate: Decimal;          // Oprocentowanie roczne (np. 0.075 = 7.5%)
+  months: number;               // Okres kredytu w miesiącach
+  type: 'annuity' | 'decreasing'; // Typ rat
+}
+
+/** Konfiguracja nadpłat */
+interface Overpayments {
+  monthly: Decimal;             // Stała nadpłata miesięczna (zł)
+  yearly: Decimal;              // Nadpłata roczna (zł)
+  yearlyMonth: number;          // Który miesiąc roku (1-12, domyślnie 12 = grudzień)
+}
+
+/** Strategia nadpłaty */
+type Strategy = 
+  | 'none'              // Bez nadpłat
+  | 'shorten-term'      // Skróć okres (rata stała, mniej miesięcy)
+  | 'reduce-payment';   // Zmniejsz ratę (okres stały, niższa rata)
+
+/** Jeden wiersz harmonogramu */
+interface ScheduleRow {
+  month: number;                // Numer miesiąca (1, 2, 3...)
+  payment: Decimal;             // Rata podstawowa (kapitał + odsetki)
+  principal: Decimal;           // Część kapitałowa raty
+  interest: Decimal;            // Część odsetkowa raty
+  overpayment: Decimal;         // Nadpłata w tym miesiącu
+  totalPaid: Decimal;           // payment + overpayment
+  balanceAfter: Decimal;        // Saldo po spłacie
+}
+
+/** Pełny harmonogram */
+interface Schedule {
+  rows: ScheduleRow[];
+  summary: {
+    totalMonths: number;
+    totalPaid: Decimal;
+    totalInterest: Decimal;
+    totalOverpayments: Decimal;
+  };
+}
+```
+
+### Calculation Rules (kolejność operacji w miesiącu)
+
+```
+KAŻDY MIESIĄC (w kolejności):
+1. Nalicz odsetki od BIEŻĄCEGO salda
+   interest = balance × (annualRate / 12)
+   
+2. Oblicz ratę podstawową
+   - Raty równe: stała kwota (wyliczona na początku)
+   - Raty malejące: principal/months + interest
+   
+3. Odejmij ratę od salda
+   balance = balance - principal_part_of_payment
+   
+4. Zastosuj nadpłatę miesięczną (jeśli jest)
+   - Jeśli monthly_overpayment > balance → overpayment = balance
+   - balance = balance - overpayment
+   
+5. Zastosuj nadpłatę roczną (jeśli to odpowiedni miesiąc)
+   - Domyślnie: miesiąc 12, 24, 36... (grudzień każdego roku)
+   - Capping: actual_yearly = min(yearly_overpayment, balance)
+   - balance = balance - actual_yearly  // odejmujemy REALNIE zastosowaną kwotę
+   
+6. Przelicz następną ratę (zależnie od strategii)
+   - 'shorten-term': rata pozostaje taka sama, kredyt kończy się wcześniej
+   - 'reduce-payment': okres pozostaje taki sam, rata maleje
+```
+
+### Mechanika 3 scenariuszy
+
+### Mechanika 3 scenariuszy dla RAT RÓWNYCH (annuity)
+
+| Scenariusz | Co stałe | Co się zmienia | Przeliczenie |
+|------------|----------|----------------|--------------|
+| `none` | rata, okres | nic | brak nadpłat |
+| `shorten-term` | rata (bazowa z miesiąca 1) | okres (skraca się) | NIE przeliczamy raty po nadpłacie |
+| `reduce-payment` | okres (360 mies.) | rata (maleje) | PO KAŻDEJ NADPŁACIE: nowa_rata = calculateAnnuityPayment(balance, rate, remaining_months) |
+
+### Mechanika 3 scenariuszy dla RAT MALEJĄCYCH (decreasing)
+
+| Scenariusz | Co stałe | Co się zmienia | Przeliczenie |
+|------------|----------|----------------|--------------|
+| `none` | część kapitałowa, okres | nic | capital = principal/months (stałe przez cały okres) |
+| `shorten-term` | część kapitałowa (original principal / original months) | okres (skraca się) | capital portion UNCHANGED, kredyt kończy wcześniej |
+| `reduce-payment` | okres (360 mies.) | część kapitałowa (maleje) | PO KAŻDEJ NADPŁACIE: new_capital = balance / remaining_months |
+
+**Wyjaśnienie dla rat malejących:**
+
+Dla `shorten-term`:
+```
+capital_portion = original_principal / original_months  // np. 300000/360 = 833.33 zł - STAŁE
+// Po nadpłacie: kapitał nadal 833.33 zł, ale saldo mniejsze = kredyt kończy się wcześniej
+```
+
+Dla `reduce-payment`:
+```
+// Przed nadpłatą (miesiąc n):
+capital_portion = original_principal / original_months  // np. 833.33 zł
+
+// Po nadpłacie 10000 zł w miesiącu n:
+remaining_months = 360 - n
+new_capital_portion = new_balance / remaining_months  // mniejsza kwota kapitału w każdej racie
+
+// Okres pozostaje 360 miesięcy, ale raty są niższe
+```
+
+**Kluczowa różnica:**
+- `shorten-term`: "Płacę tyle samo, ale skończę wcześniej"
+- `reduce-payment`: "Płacę mniej, ale skończę w tym samym terminie"
+
+**Efekt kaskadowy (clarification):**
+- Dotyczy TYLKO strategii `reduce-payment`
+- Po nadpłacie rata spada → użytkownik WIDZI niższą ratę w harmonogramie
+- MVP: Użytkownik może ręcznie zwiększyć nadpłatę w następnej symulacji
+- Post-MVP: Opcjonalny checkbox "Automatycznie dodawaj różnicę do nadpłaty"
+- **Nie ma osobnej funkcji "kaskadowe" - to naturalny efekt strategii `reduce-payment`**
+
+### Zasady zaokrągleń
+
+```typescript
+// Konfiguracja Decimal.js
+Decimal.set({ 
+  precision: 20,           // Wysoka precyzja wewnętrzna
+  rounding: Decimal.ROUND_HALF_UP  // Zaokrąglenie "bankowe"
+});
+
+// Zaokrąglanie do groszy (2 miejsca) - TYLKO na końcu obliczeń
+function toGrosze(value: Decimal): Decimal {
+  return value.toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+}
+
+// W testach: porównanie z tolerancją 0.01 zł
+expect(result.toNumber()).toBeCloseTo(expected, 2);
+```
+
+**Kiedy zaokrąglamy:**
+- Wartości Decimal przechowujemy z pełną precyzją
+- Zaokrąglamy do groszy TYLKO przy:
+  - Wyświetlaniu w UI
+  - Zapisie do localStorage (jako string)
+  - Asercjach testowych (z tolerancją)
+
+### Test Fixture Source
+
+**Raty równe (300k, 30 lat, 6%/rok):**
+- Źródło: Formuła matematyczna z weryfikacją krzyżową
+- `R = 300000 × (0.005 / (1 - (1.005)^(-360)))`
+- **Oczekiwana rata: 1798.65 zł** (po zaokrągleniu do groszy)
+
+```typescript
+// Weryfikacja w teście
+const principal = new Decimal(300000);
+const monthlyRate = new Decimal(0.06).div(12); // 0.005
+const months = 360;
+
+const payment = calculateAnnuityPayment(principal, monthlyRate, months);
+expect(payment.toDecimalPlaces(2).toNumber()).toBe(1798.65);
+```
+
+### GitHub Pages Base Path (jednoznaczna konfiguracja)
+
+**Używamy `paths.base` w svelte.config.js, NIE zmiennej środowiskowej BASE_PATH.**
+
+```javascript
+// svelte.config.js - JEDYNE miejsce konfiguracji
+import adapter from '@sveltejs/adapter-static';
+
+const dev = process.argv.includes('dev');
+
+export default {
+  kit: {
+    adapter: adapter({
+      pages: 'build',
+      assets: 'build',
+      fallback: '404.html',
+      strict: true
+    }),
+    paths: {
+      base: dev ? '' : '/hipocalc'  // Hardcoded, nie env variable
+    }
+  }
+};
+```
+
+```yaml
+# .github/workflows/deploy.yml - BEZ env BASE_PATH
+- run: npm run build
+  # NIE ustawiamy BASE_PATH - svelte.config.js wykrywa production build
+```
+
+**Weryfikacja:**
+- `npm run dev` → base path = '' (localhost)
+- `npm run build` → base path = '/hipocalc' (production)
+
+### Chart Data Integration (Decimal → number)
+
+```typescript
+// Konwersja Schedule do formatu uPlot
+function scheduleToChartData(schedule: Schedule): uPlot.AlignedData {
+  return [
+    schedule.rows.map(row => row.month),                    // x: number[]
+    schedule.rows.map(row => row.balanceAfter.toNumber()), // y: number[]
+  ];
+}
+```
+
+**ZASADA**: Decimal używamy w engine, number w wykresach i UI.
+
+### localStorage Strategy
+
+**Zapisujemy TYLKO inputy, NIE wyniki:**
+
+```typescript
+interface PersistedState {
+  // Inputs (zapisywane)
+  principal: string;
+  years: string;
+  rate: string;
+  loanType: 'annuity' | 'decreasing';
+  monthlyOverpayment: string;
+  yearlyOverpayment: string;
+  // Złoty Środek inputs
+  netIncome?: string;
+  fixedExpenses?: string;
+}
+
+// NIE zapisujemy:
+// - schedule (360+ wierszy × 3 scenariusze = za duże)
+// - wyników obliczeń (zawsze recompute)
+```
+
+**Rozmiar**: ~500 bytes per save (dobrze poniżej 5MB limitu localStorage)
+
+---
+
+## Work Objectives
+
+### Core Objective
+Zbudować klient-side'owy kalkulator nadpłaty kredytu hipotecznego z unikalnym algorytmem "Złoty Środek", który pomoże użytkownikom znaleźć optymalną równowagę między nadpłacaniem a jakością życia.
+
+### Concrete Deliverables
+- Statyczna aplikacja SvelteKit hostowana na GitHub Pages
+- Kalkulator z obsługą rat równych i malejących
+- Algorytm "Złoty Środek" z automatycznym wyliczeniem
+- 4 typy wizualizacji (tabela + 3 wykresy)
+- UI w stylu banku z lat 1700-1850
+- CI/CD: automatyczny deploy na merge do main
+
+### Definition of Done
+- [x] `npm run build` - sukces, brak błędów
+- [x] `npm run test` - wszystkie testy przechodzą
+- [x] Aplikacja dostępna pod `radoxtech.github.io/hipocalc`
+- [x] Wszystkie formuły finansowe pokryte testami jednostkowymi
+- [x] localStorage zapisuje i odtwarza stan kalkulatora
+- [x] Lighthouse accessibility score ≥ 90
+
+### Must Have
+- Obsługa rat równych i malejących
+- Nadpłaty: roczne, miesięczne
+- Porównanie 3 scenariuszy: bez nadpłaty / skróć okres / zmniejsz ratę
+- (strategia `reduce-payment` naturalnie pokazuje efekt spadającej raty)
+- Algorytm Złoty Środek
+- Vintage UI (Playfair Display, burgundy/gold/cream)
+- TDD - testy PRZED implementacją
+- GitHub Actions CI/CD
+
+### Must NOT Have (Guardrails)
+- JavaScript floats dla pieniędzy (używaj Decimal.js)
+- Chart.js (za duży - używaj uPlot)
+- Multi-language support (tylko PL)
+- Backend / baza danych
+- Konta użytkowników
+- Integracja z zewnętrznymi API banków
+- Gold (#FFBD00) jako kolor tekstu (problem z kontrastem)
+- Więcej niż 3 scenariusze porównania
+- Zoom/pan/export w wykresach (overengineering)
+
+---
+
+## Verification Strategy (MANDATORY)
+
+### Test Decision
+- **Infrastructure exists**: NO (greenfield project)
+- **User wants tests**: TDD
+- **Framework**: Vitest (natywna integracja z Vite/SvelteKit)
+
+### TDD Workflow
+Każdy task z logiką finansową:
+1. **RED**: Napisz failing test
+2. **GREEN**: Minimalna implementacja
+3. **REFACTOR**: Oczyść kod, testy nadal zielone
+
+### Test Fixtures (verified from Polish banking docs)
+
+```typescript
+// Raty malejące - test case
+const testLoan = {
+  principal: 6000,      // zł
+  months: 12,
+  annualRate: 0.06,     // 6%
+};
+
+const expectedPayments = [
+  { month: 1, principal: 500, interest: 30.00, total: 530.00 },
+  { month: 2, principal: 500, interest: 27.50, total: 527.50 },
+  // ... decreases by 2.50 zł each month
+  { month: 12, principal: 500, interest: 2.50, total: 502.50 },
+];
+```
+
+---
+
+## Task Flow
+
+```
+[0. Project Setup] → [1. CI/CD] → [2. Financial Engine] → [3. Złoty Środek]
+                                          ↓
+[4. UI Components] ← [5. Charts] ← [6. Calculator Page]
+                                          ↓
+                              [7. localStorage] → [8. Final Polish]
+```
+
+## Parallelization
+
+| Group | Tasks | Reason |
+|-------|-------|--------|
+| A | 4, 5 | UI components and charts can be built in parallel |
+
+| Task | Depends On | Reason |
+|------|------------|--------|
+| 1 | 0 | CI/CD needs project structure |
+| 2 | 0 | Engine needs Decimal.js installed |
+| 3 | 2 | Złoty Środek uses engine functions |
+| 6 | 2, 4, 5 | Page combines engine, UI, charts |
+| 7 | 6 | localStorage persists calculator state |
+| 8 | 7 | Final polish after all features work |
+
+---
+
+## TODOs
+
+---
+
+### - [x] 0. Project Setup - SvelteKit + adapter-static
+**Commit**: `f9e35c5` ✅
+
+**What to do**:
+- Initialize SvelteKit project with TypeScript
+- Install adapter-static for GitHub Pages
+- Configure `svelte.config.js` with base path `/hipocalc`
+- Add `src/routes/+layout.js` with `prerender = true`
+- Create `static/.nojekyll` file
+- Install dependencies: Decimal.js, uPlot
+- Configure Vitest for testing
+
+**Must NOT do**:
+- Don't add unnecessary dependencies
+- Don't configure SSR (we're static-only)
+
+**Parallelizable**: NO (foundation task)
+
+**References**:
+
+**Pattern References**:
+- SvelteKit adapter-static docs: https://svelte.dev/docs/kit/adapter-static
+
+**Configuration Templates**:
+```javascript
+// svelte.config.js
+import adapter from '@sveltejs/adapter-static';
+
+export default {
+  kit: {
+    adapter: adapter({
+      pages: 'build',
+      assets: 'build',
+      fallback: '404.html',
+      strict: true
+    }),
+    paths: {
+      base: process.env.NODE_ENV === 'production' ? '/hipocalc' : ''
+    }
+  }
+};
+```
+
+```javascript
+// src/routes/+layout.js
+export const prerender = true;
+export const trailingSlash = 'always';
+```
+
+**Acceptance Criteria**:
+
+- [x] `npm create svelte@latest . -- --template skeleton --types typescript` → project created
+- [x] `npm install` → success
+- [x] `npm run dev` → app runs on localhost
+- [x] `npm run build` → builds to `build/` directory
+- [x] `build/` contains `index.html` and `.nojekyll`
+- [x] `package.json` contains: `@sveltejs/adapter-static`, `decimal.js`, `uplot`, `vitest`
+
+**Commit**: YES
+- Message: `chore: initialize SvelteKit project with adapter-static`
+- Files: `package.json`, `svelte.config.js`, `src/`, `static/.nojekyll`
+- Pre-commit: `npm run build`
+
+---
+
+### - [x] 1. GitHub Actions CI/CD Pipeline
+**Commit**: `2895e1c`, `60cfd70` ✅
+
+**What to do**:
+- Create `.github/workflows/deploy.yml`
+- Configure automatic deployment on push to main
+- Set up GitHub Pages with Actions source
+- Test deployment with placeholder content
+
+**Must NOT do**:
+- Don't add manual deployment steps
+- Don't use gh-pages branch (use Actions)
+
+**Parallelizable**: NO (depends on 0)
+
+**References**:
+
+**Pattern References**:
+- GitHub Pages deploy action: `actions/deploy-pages@v4`
+- SvelteKit official example: https://github.com/sveltejs/kit/tree/main/documentation/docs/25-build-and-deploy
+
+**Configuration Template**:
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: 'main'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+        # Base path configured in svelte.config.js (detects production build)
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'build/'
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment
+```
+
+**Acceptance Criteria**:
+
+- [x] `.github/workflows/deploy.yml` exists
+- [x] Push to main triggers workflow
+- [x] Workflow completes successfully (green checkmark)
+- [x] `radoxtech.github.io/hipocalc` shows placeholder page
+- [x] GitHub repo Settings → Pages shows "Your site is live"
+
+**Manual Verification**:
+- [x] Navigate to `https://radoxtech.github.io/hipocalc`
+- [x] Page loads without 404
+- [x] Console has no errors about base path
+
+**Commit**: YES
+- Message: `ci: add GitHub Actions workflow for Pages deployment`
+- Files: `.github/workflows/deploy.yml`
+- Pre-commit: `npm run build`
+
+---
+
+### - [x] 2. Financial Calculation Engine (TDD)
+**Commit**: `81781f7`, `4dfb318` ✅
+
+**What to do**:
+- Create `src/lib/engine/` directory for pure calculation functions
+- Implement mortgage formulas using Decimal.js
+- Cover all functions with unit tests FIRST
+
+**Functions to implement** (see Domain Specification for types):
+1. `calculateAnnuityPayment(principal, monthlyRate, months)` - rata równa
+2. `calculateDecreasingPayment(principal, monthlyRate, months, currentMonth)` - rata malejąca
+3. `generateAmortizationSchedule(loan, overpayments, strategy)` - harmonogram z nadpłatami
+4. `calculateTotalInterest(schedule)` - suma odsetek
+5. `calculateSavings(withOverpayment, withoutOverpayment)` - oszczędności
+6. `toGrosze(value)` - zaokrąglenie do 2 miejsc (ROUND_HALF_UP)
+
+**Must NOT do**:
+- Don't use JavaScript floats (use Decimal.js)
+- Don't implement UI in this task
+- Don't skip tests
+
+**Parallelizable**: NO (depends on 0)
+
+**References**:
+
+**Formula References** (verified from Polish banking):
+```typescript
+// Raty równe (annuity)
+R = K × (r / (1 - (1 + r)^(-n)))
+
+// Raty malejące (decreasing)
+R_n = K/n + S_n × r
+// where S_n = remaining balance
+
+// Total interest (raty malejące) - quick formula
+TotalInterest = (K × r × (n + 1)) / 2
+```
+
+**Library Docs**:
+- Decimal.js: https://mikemcl.github.io/decimal.js/
+
+**Test Pattern**:
+```typescript
+// src/lib/engine/mortgage.test.ts
+import { describe, it, expect } from 'vitest';
+import Decimal from 'decimal.js';
+import { calculateDecreasingPayment } from './mortgage';
+
+describe('calculateDecreasingPayment', () => {
+  it('calculates first payment correctly', () => {
+    const result = calculateDecreasingPayment(
+      new Decimal(6000),  // principal
+      new Decimal(0.005), // monthly rate (6% / 12)
+      12,                 // months
+      1                   // current month
+    );
+    
+    expect(result.principal.toNumber()).toBe(500);
+    expect(result.interest.toNumber()).toBe(30);
+    expect(result.total.toNumber()).toBe(530);
+  });
+});
+```
+
+**Acceptance Criteria**:
+
+- [x] TDD: Test file created BEFORE implementation
+- [x] Types from Domain Specification implemented in `src/lib/engine/types.ts`
+- [x] `npm run test` → all tests pass
+- [x] `calculateAnnuityPayment` test: 
+  - Input: principal=300000, rate=0.005, months=360
+  - Expected: **1798.65 zł** (toDecimalPlaces(2) === 1798.65)
+- [x] `calculateDecreasingPayment` tests pass with fixture data (6000 zł, 12 mies, 6%)
+- [x] `generateAmortizationSchedule` tests for ANNUITY (type='annuity'):
+  - Scenario 'none': 360 rows, no overpayments applied
+  - Scenario 'shorten-term' (500zł/mies nadpłaty): fewer rows (<360), same base payment
+  - Scenario 'reduce-payment' (500zł/mies nadpłaty): 360 rows, payments decrease after each overpayment
+- [x] `generateAmortizationSchedule` tests for DECREASING (type='decreasing'):
+  - Scenario 'none': 360 rows, capital portion = 300000/360 = 833.33 zł (stałe)
+  - Scenario 'shorten-term' (500zł/mies nadpłaty): fewer rows (<360), capital portion stays 833.33 zł
+  - Scenario 'reduce-payment' (500zł/mies nadpłaty): 360 rows, capital portion decreases (new_balance/remaining_months)
+- [x] Yearly overpayment applied in correct month (default: month 12, 24, 36...)
+- [x] Overpayment cannot exceed remaining balance
+- [x] All monetary values are Decimal objects internally
+- [x] Functions are pure (no side effects)
+
+**Commit**: YES
+- Message: `feat(engine): add mortgage calculation functions with TDD`
+- Files: `src/lib/engine/types.ts`, `src/lib/engine/mortgage.ts`, `src/lib/engine/mortgage.test.ts`
+- Pre-commit: `npm run test`
+
+---
+
+### - [x] 3. Algorytm "Złoty Środek" (TDD)
+**Commit**: `dc3aefd` ✅
+
+**What to do**:
+- Design mathematical formula for optimal overpayment
+- Implement in `src/lib/engine/golden-mean.ts`
+- Consider: income, expenses, mortgage payment, emergency fund status
+- Output: recommended monthly overpayment + discretionary budget
+
+**Algorithm Design**:
+```
+Inputs:
+- netIncome: monthly take-home pay
+- fixedExpenses: rent, utilities, food, transport (no pleasures)
+- mortgagePayment: current monthly payment
+- emergencyFundMonths: target (e.g., 6)
+- emergencyFundStatus: 'have' | 'build-fast' | 'build-slow-3y'
+
+Calculations:
+1. availableAfterBasics = netIncome - fixedExpenses - mortgagePayment
+2. if emergencyFundStatus != 'have':
+   - emergencyTarget = fixedExpenses × emergencyFundMonths
+   - monthlyEmergencySaving based on status (fast=50%, slow=15% of available)
+3. remainingForLifeAndOverpayment = available - emergencyContribution
+4. Apply "Złoty Środek" formula:
+   - Base: 50% for pleasures, 50% for overpayment
+   - Adjust: if remainingForLife < minimum (e.g., 1000 zł), reduce overpayment
+   - Optional cap: suggest if overpayment > 30% of netIncome (warning, not hard limit)
+
+Output:
+- recommendedOverpayment: Decimal
+- discretionaryBudget: Decimal (for pleasures)
+- monthsToPayoff: number (with this overpayment)
+- interestSaved: Decimal
+```
+
+**Must NOT do**:
+- Don't add UI slider (algorithm decides)
+- Warn (don't block) if overpayment exceeds 30% of income
+- Don't recommend overpayment if it leaves < 1000 zł for pleasures
+
+**Parallelizable**: NO (depends on 2)
+
+**References**:
+
+**Algorithm Pattern** (50/30/20 inspired but adapted):
+```typescript
+// src/lib/engine/golden-mean.ts
+import Decimal from 'decimal.js';
+
+interface GoldenMeanInput {
+  netIncome: Decimal;
+  fixedExpenses: Decimal;
+  mortgagePayment: Decimal;
+  emergencyFundMonths: number;
+  emergencyFundStatus: 'have' | 'build-fast' | 'build-slow-3y';
+  currentAge?: number;
+}
+
+interface GoldenMeanOutput {
+  recommendedOverpayment: Decimal;
+  discretionaryBudget: Decimal;
+  emergencyContribution: Decimal;
+  rationale: string;
+}
+```
+
+**Edge Cases to Test**:
+- Very low income → overpayment = 0, all for life
+- Very high income → cap at 30% of income
+- Emergency fund not built → prioritize fund over overpayment
+- Expenses > income → error/warning
+
+**Acceptance Criteria**:
+
+- [x] TDD: Tests written BEFORE implementation
+- [x] `npm run test` → all golden-mean tests pass
+- [x] Test case 1: Income 8000, expenses 4000, payment 2000
+  - Available: 2000 zł
+  - Expected: ~1000 overpayment, ~1000 pleasures
+- [x] Test case 2: Income 5000, expenses 3500, payment 1200
+  - Available: 300 zł
+  - Expected: 0 overpayment (życie ważniejsze)
+- [x] Test case 3: Very high earner (15000 income)
+  - Overpayment suggestion includes warning if > 30% (but not blocked)
+- [x] Emergency fund scenarios tested
+- [x] Output includes `rationale` explaining the recommendation
+
+**Commit**: YES
+- Message: `feat(engine): implement Złoty Środek algorithm`
+- Files: `src/lib/engine/golden-mean.ts`, `src/lib/engine/golden-mean.test.ts`
+- Pre-commit: `npm run test`
+
+---
+
+### - [x] 4. UI Components - Vintage Bank Style
+**Commit**: `640e942`, `6c3a9c4` ✅ (redesigned to modern style per user feedback)
+
+**What to do**:
+- Create design system in `src/lib/components/`
+- Implement reusable components with 1700-1850 aesthetic
+- Ensure WCAG accessibility
+
+**Components to create**:
+1. `VintageCard.svelte` - container with ornamental borders
+2. `VintageInput.svelte` - form input with label
+3. `VintageButton.svelte` - primary/secondary buttons
+4. `VintageSelect.svelte` - dropdown with vintage styling
+5. `SectionDivider.svelte` - ornamental divider between sections
+6. `BankSeal.svelte` - decorative seal element
+
+**Must NOT do**:
+- Don't use gold (#FFBD00) for text (contrast issue)
+- Don't add animations that affect accessibility
+- Don't skip focus states
+
+**Parallelizable**: YES (with task 5)
+
+**References**:
+
+**Design Tokens** (from research):
+```css
+/* src/lib/styles/tokens.css */
+:root {
+  /* Colors */
+  --color-burgundy: #730000;
+  --color-burgundy-light: #9B000A;
+  --color-gold: #BD9544;
+  --color-gold-decorative: #FFBD00; /* NOT for text */
+  --color-cream: #F4F1E4;
+  --color-parchment: #F3EFD0;
+  --color-ink: #1C1C1E;
+  
+  /* Typography */
+  --font-heading: 'Playfair Display', serif;
+  --font-body: 'Cormorant', serif;
+  
+  /* Spacing */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 2rem;
+  --space-xl: 3rem;
+}
+```
+
+**Google Fonts Import**:
+```html
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Cormorant:wght@400;500;600&display=swap" rel="stylesheet">
+```
+
+**Accessibility Requirements**:
+- All inputs have associated labels
+- Focus visible on all interactive elements
+- Minimum touch target 44x44px
+- Color contrast ratio ≥ 4.5:1 for text
+
+**Acceptance Criteria**:
+
+- [x] `VintageCard` renders with ornamental corners
+- [x] `VintageInput` has label, placeholder, error state
+- [x] `VintageButton` has hover, focus, disabled states
+- [x] All components use design tokens (no hardcoded colors)
+- [x] Lighthouse accessibility audit on components page ≥ 90
+- [x] Responsive: works on mobile 320px width
+
+**Manual Verification**:
+- [x] Using dev browser: Navigate to `/components` preview page
+- [x] Tab through all interactive elements - focus visible
+- [x] Test with screen reader (VoiceOver/NVDA)
+- [x] Screenshot on mobile viewport
+
+**Commit**: YES
+- Message: `feat(ui): add vintage bank style component library`
+- Files: `src/lib/components/*.svelte`, `src/lib/styles/tokens.css`
+- Pre-commit: `npm run build`
+
+---
+
+### - [x] 5. Charts with uPlot
+**Commit**: `74a3469` ✅
+
+**What to do**:
+- Install and configure uPlot
+- Create chart wrapper components
+- Implement 3 chart types for scenarios
+
+**Charts to create**:
+1. `BalanceChart.svelte` - spadek salda w czasie
+2. `SavingsChart.svelte` - kumulatywne oszczędności
+3. `ScenarioComparison.svelte` - 3 linie: bez nadpłaty / skróć / zmniejsz
+
+**Must NOT do**:
+- Don't use Chart.js (too large)
+- Don't add zoom/pan (overengineering)
+- Don't skip accessible data table
+
+**Parallelizable**: YES (with task 4)
+
+**References**:
+
+**uPlot Docs**: https://github.com/leeoniya/uPlot
+
+**Chart Wrapper Pattern**:
+```svelte
+<!-- src/lib/components/charts/BalanceChart.svelte -->
+<script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
+  import uPlot from 'uplot';
+  import type { Schedule } from '$lib/engine/mortgage';
+  
+  export let schedule: Schedule;
+  
+  let chartContainer: HTMLDivElement;
+  let chart: uPlot;
+  
+  onMount(() => {
+    const data = [
+      schedule.map(row => row.month),     // x: months
+      schedule.map(row => row.balance),   // y: balance
+    ];
+    
+    const opts = {
+      width: chartContainer.clientWidth,
+      height: 300,
+      scales: { x: { time: false } },
+      series: [
+        {},
+        { stroke: '#730000', fill: 'rgba(115, 0, 0, 0.1)' }
+      ]
+    };
+    
+    chart = new uPlot(opts, data, chartContainer);
+  });
+  
+  onDestroy(() => chart?.destroy());
+</script>
+
+<div bind:this={chartContainer}></div>
+
+<!-- Accessible data table -->
+<details>
+  <summary>Dane w tabeli</summary>
+  <table>
+    <!-- ... -->
+  </table>
+</details>
+```
+
+**Vintage Styling for Charts**:
+- Line color: burgundy (#730000)
+- Fill: rgba(115, 0, 0, 0.1)
+- Grid: subtle cream lines
+- Font: Cormorant for labels
+
+**Acceptance Criteria**:
+
+- [x] uPlot installed and working
+- [x] `BalanceChart` shows declining balance over months
+- [x] `SavingsChart` shows cumulative interest saved
+- [x] `ScenarioComparison` shows 3 lines with legend
+- [x] Each chart has `<details>` with accessible table
+- [x] Charts responsive (resize on window change)
+- [x] Vintage color scheme applied
+
+**Manual Verification**:
+- [x] Using dev browser: View each chart type
+- [x] Resize window - charts adapt
+- [x] Open data table - matches chart data
+- [x] Screenshot for visual review
+
+**Commit**: YES
+- Message: `feat(charts): add uPlot visualizations with vintage styling`
+- Files: `src/lib/components/charts/*.svelte`
+- Pre-commit: `npm run build`
+
+---
+
+### - [x] 6. Main Calculator Page
+**Commit**: `5931518`, `5f1f736` ✅
+
+**What to do**:
+- Create `src/routes/+page.svelte` with full calculator
+- Implement two-step flow: Basic → Złoty Środek (optional)
+- Wire up engine functions to UI
+- Show all 4 visualizations
+
+**Page Structure**:
+```
+┌─────────────────────────────────────────┐
+│  [Header: Logo + Title]                 │
+├─────────────────────────────────────────┤
+│  KROK 1: Dane kredytu                   │
+│  ┌─────────────────────────────────────┐│
+│  │ Kwota kredytu: [___________] zł     ││
+│  │ Okres:         [___] lat [___] mies ││
+│  │ Oprocentowanie:[___] %              ││
+│  │ Typ rat:       ○ Równe ○ Malejące   ││
+│  │ Nadpłata mies: [___________] zł     ││
+│  │ Nadpłata roczna:[__________] zł     ││
+│  │ Prowizja (opcj):[__________] %      ││
+│  │                                     ││
+│  │ [   OBLICZ   ]                      ││
+│  └─────────────────────────────────────┘│
+├─────────────────────────────────────────┤
+│  [Banner: Wypróbuj Złoty Środek!]       │
+│  (Kliknij aby dowiedzieć się więcej)    │
+├─────────────────────────────────────────┤
+│  KROK 2: Złoty Środek (opcjonalny)      │
+│  ┌─────────────────────────────────────┐│
+│  │ Dochód netto:   [___________] zł    ││
+│  │ Stałe wydatki:  [___________] zł    ││
+│  │ Wiek:           [___]               ││
+│  │ Poduszka:       [6] miesięcy        ││
+│  │ Status poduszki: ○ Mam ○ Buduję...  ││
+│  │                                     ││
+│  │ [ WYLICZ ZŁOTY ŚRODEK ]             ││
+│  └─────────────────────────────────────┘│
+├─────────────────────────────────────────┤
+│  WYNIKI                                 │
+│  ┌─────────┐ ┌─────────┐ ┌─────────┐   │
+│  │Bez nadpł│ │Skróć    │ │Zmniejsz │   │
+│  │30 lat   │ │22 lata  │ │30 lat   │   │
+│  │450k odsetek│380k    │ │420k     │   │
+│  └─────────┘ └─────────┘ └─────────┘   │
+├─────────────────────────────────────────┤
+│  [Tabs: Harmonogram | Wykres salda |    │
+│         Porównanie | Oszczędności]      │
+│  ┌─────────────────────────────────────┐│
+│  │ [Active visualization]              ││
+│  └─────────────────────────────────────┘│
+├─────────────────────────────────────────┤
+│  [Footer: Info + GitHub link]           │
+└─────────────────────────────────────────┘
+```
+
+**Must NOT do**:
+- Don't skip Złoty Środek promo banner
+- Don't show all charts at once (use tabs)
+- Don't allow invalid inputs (validate)
+
+**Parallelizable**: NO (depends on 2, 4, 5)
+
+**References**:
+
+**Svelte 5 State Pattern**:
+```svelte
+<script lang="ts">
+  import { BROWSER } from '$app/environment';
+  import Decimal from 'decimal.js';
+  
+  // Form state
+  let principal = $state('300000');
+  let years = $state('30');
+  let rate = $state('7.5');
+  let loanType = $state<'annuity' | 'decreasing'>('annuity');
+  
+  // Results (derived)
+  let schedule = $derived.by(() => {
+    if (!principal || !years || !rate) return null;
+    return generateSchedule(/* ... */);
+  });
+</script>
+```
+
+**Acceptance Criteria**:
+
+- [x] Page loads without errors
+- [x] Form inputs validate (no negative numbers, rate 0-100%)
+- [x] "OBLICZ" button generates schedule
+- [x] 3 summary cards show: bez nadpłaty / skróć / zmniejsz
+- [x] Tabs switch between 4 visualizations
+- [x] Złoty Środek section collapsible/expandable
+- [x] Banner "reklamuje" Złoty Środek feature
+- [x] Mobile responsive (stacks vertically)
+
+**Manual Verification**:
+- [x] Using dev browser:
+  - Fill form with: 300000 zł, 30 lat, 7.5%, raty równe, 500 zł/mies nadpłaty
+  - Click OBLICZ
+  - Verify 3 cards show different results
+  - Switch tabs - all charts render
+  - Fill Złoty Środek form
+  - Verify recommendation appears
+
+**Commit**: YES
+- Message: `feat(page): implement main calculator with visualizations`
+- Files: `src/routes/+page.svelte`, `src/routes/+layout.svelte`
+- Pre-commit: `npm run build && npm run test`
+
+---
+
+### - [x] 7. localStorage Persistence
+**Commit**: `d3092c1` ✅
+
+**What to do**:
+- Create persistent store for calculator state
+- Save **only inputs** to localStorage (results are recomputed)
+- Restore on page load
+- Handle SSR safely
+
+**Must NOT do**:
+- Don't access localStorage without BROWSER check
+- Don't save sensitive data
+- Don't save calculated results (only inputs) - see Domain Specification
+- Don't exceed localStorage quota (~500 bytes per save)
+
+**Parallelizable**: NO (depends on 6)
+
+**References**:
+
+**Svelte 5 localStorage Pattern**:
+```typescript
+// src/lib/stores/calculator.svelte.ts
+import { BROWSER } from '$app/environment';
+
+interface CalculatorState {
+  principal: string;
+  years: string;
+  rate: string;
+  loanType: 'annuity' | 'decreasing';
+  monthlyOverpayment: string;
+  yearlyOverpayment: string;
+  // Złoty Środek
+  netIncome?: string;
+  fixedExpenses?: string;
+}
+
+const STORAGE_KEY = 'hipocalc-state';
+
+class CalculatorStore {
+  state = $state<CalculatorState>({
+    principal: '',
+    years: '30',
+    rate: '',
+    loanType: 'annuity',
+    monthlyOverpayment: '',
+    yearlyOverpayment: '',
+  });
+  
+  constructor() {
+    if (BROWSER) {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        try {
+          this.state = { ...this.state, ...JSON.parse(saved) };
+        } catch {}
+      }
+    }
+    
+    $effect(() => {
+      if (BROWSER) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      }
+    });
+  }
+  
+  reset() {
+    this.state = { /* defaults */ };
+  }
+}
+
+export const calculatorStore = new CalculatorStore();
+```
+
+**Acceptance Criteria**:
+
+- [x] Form values persist after page refresh
+- [x] "Reset" button clears all saved data
+- [x] No errors on first visit (empty localStorage)
+- [x] Works in incognito mode (graceful fallback)
+- [x] SSR build succeeds (no localStorage errors during build)
+
+**Manual Verification**:
+- [x] Using dev browser:
+  - Fill form with test data
+  - Refresh page (Cmd+R)
+  - Verify form still has values
+  - Click "Reset" button
+  - Refresh - form should be empty/defaults
+  - Open DevTools → Application → Local Storage
+  - Verify `hipocalc-state` key exists
+
+**Commit**: YES
+- Message: `feat(storage): add localStorage persistence for calculator state`
+- Files: `src/lib/stores/calculator.svelte.ts`
+- Pre-commit: `npm run build`
+
+---
+
+### - [x] 8. Final Polish & Deployment
+**Commit**: `b38f3ca` ✅
+
+**What to do**:
+- Add meta tags for SEO/social sharing
+- Add favicon with vintage bank seal design
+- Final accessibility audit
+- Test production deployment
+- Update README
+
+**Must NOT do**:
+- Don't add tracking/analytics
+- Don't optimize prematurely (keep simple)
+
+**Parallelizable**: NO (final task)
+
+**References**:
+
+**Meta Tags**:
+```svelte
+<!-- src/app.html or +layout.svelte -->
+<svelte:head>
+  <title>HipoCalc - Kalkulator Nadpłaty Kredytu</title>
+  <meta name="description" content="Oblicz optymalną nadpłatę kredytu hipotecznego. Algorytm Złoty Środek pomoże znaleźć równowagę między oszczędzaniem a życiem." />
+  <meta property="og:title" content="HipoCalc - Kalkulator Nadpłaty Kredytu" />
+  <meta property="og:description" content="Znajdź swój Złoty Środek - nadpłacaj mądrze, żyj pełnią życia" />
+  <meta property="og:image" content="/og-image.png" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+</svelte:head>
+```
+
+**Acceptance Criteria**:
+
+- [x] `npm run build` → success
+- [x] `npm run test` → all tests pass
+- [x] Lighthouse scores:
+  - Performance ≥ 90
+  - Accessibility ≥ 90
+  - Best Practices ≥ 90
+  - SEO ≥ 90
+- [x] Social sharing preview works (test with card validator)
+- [x] README has: description, features, tech stack, local dev instructions
+- [x] Production URL works: `radoxtech.github.io/hipocalc`
+
+**Manual Verification**:
+- [x] Using dev browser:
+  - Navigate to production URL
+  - Full user flow: input → calculate → view results → Złoty Środek
+  - Share URL on social media preview tool
+  - Test on real mobile device
+  - Run Lighthouse audit
+
+**Commit**: YES
+- Message: `chore: add meta tags, favicon, and final polish`
+- Files: `src/app.html`, `static/favicon.svg`, `static/og-image.png`, `README.md`
+- Pre-commit: `npm run build && npm run test`
+
+---
+
+## Commit Strategy
+
+| After Task | Message | Files | Verification |
+|------------|---------|-------|--------------|
+| 0 | `chore: initialize SvelteKit with adapter-static` | package.json, svelte.config.js, src/ | `npm run build` |
+| 1 | `ci: add GitHub Actions workflow` | .github/workflows/deploy.yml | Push & verify GH Pages |
+| 2 | `feat(engine): add mortgage calculations (TDD)` | src/lib/engine/mortgage.* | `npm run test` |
+| 3 | `feat(engine): implement Złoty Środek algorithm` | src/lib/engine/golden-mean.* | `npm run test` |
+| 4 | `feat(ui): add vintage bank components` | src/lib/components/*.svelte | `npm run build` |
+| 5 | `feat(charts): add uPlot visualizations` | src/lib/components/charts/*.svelte | `npm run build` |
+| 6 | `feat(page): implement main calculator` | src/routes/+page.svelte | `npm run build && npm run test` |
+| 7 | `feat(storage): add localStorage persistence` | src/lib/stores/*.svelte.ts | `npm run build` |
+| 8 | `chore: final polish and meta tags` | app.html, static/*, README.md | Lighthouse audit |
+
+---
+
+## Success Criteria
+
+### Verification Commands
+```bash
+npm run build    # Expected: Success, no errors
+npm run test     # Expected: All tests pass
+npm run preview  # Expected: App works locally
+```
+
+### Final Checklist
+- [x] All "Must Have" features present
+- [x] All "Must NOT Have" guardrails respected
+- [x] All tests pass (36/36)
+- [x] Production URL accessible (https://radoxtech.github.io/hipocalc/)
+- [x] localStorage persists state
+- [x] Złoty Środek provides recommendations
+- [x] All 4 visualizations work
+- [x] Dark mode toggle added per user request
+- [x] Footer corrected (Opus 4.5)
+
+---
+
+## Post-MVP (Future)
+
+### Eksport do PDF
+- Harmonogram w stylu bankowym
+- Pieczęć "Wyliczone przez HipoCalc"
+
+### Symulacja zmiany stóp WIRON
+- Suwak: co jeśli stopa wzrośnie/spadnie o X%
+- Stress test scenariusze
