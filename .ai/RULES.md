@@ -116,3 +116,17 @@ git push origin main --tags  # Only after PR merge!
 ```
 
 **AI agents must NEVER push directly to main. Always use PR workflow.**
+
+## Deployment
+
+Deployment to GitHub Pages happens automatically when a **release is published**.
+
+### Trigger
+- `on: release` with `types: [published]`
+- NOT on push to main
+
+### Workflow
+1. Merge PR to main
+2. Create and push tag: `git tag -a vX.Y.Z -m "Release" && git push origin --tags`
+3. Create release: `gh release create vX.Y.Z --title "vX.Y.Z" --notes "..."`
+4. GitHub Actions automatically deploys to Pages

@@ -888,7 +888,7 @@
   <!-- Footer -->
   <footer class="calculator__footer">
     <p>
-      HipoCalc &copy; 2025 | 
+      HipoCalc v1.1.4 &copy; 2025 | 
       <a href="https://github.com/radoxtech/hipocalc" target="_blank" rel="noopener">
         Kod źródłowy na GitHub
       </a>
