@@ -177,12 +177,19 @@
   let goldenMeanResult = $state<GoldenMeanOutput | null>(null);
 
    // Results state
-   let scheduleNone = $state<Schedule | null>(null);
-   let scheduleShortenTerm = $state<Schedule | null>(null);
-   let scheduleReducePayment = $state<Schedule | null>(null);
-   let scheduleShortenTermReinvest = $state<Schedule | null>(null);
-   let hasCalculated = $state(false);
-   let activeTab = $state<'comparison' | 'balance' | 'savings' | 'schedule'>('comparison');
+    let scheduleNone = $state<Schedule | null>(null);
+    let scheduleShortenTerm = $state<Schedule | null>(null);
+    let scheduleReducePayment = $state<Schedule | null>(null);
+    let scheduleShortenTermReinvest = $state<Schedule | null>(null);
+    let hasCalculated = $state(false);
+    let activeTab = $state<'comparison' | 'balance' | 'savings' | 'schedule'>('comparison');
+
+    // Use reinvest schedule if enabled, otherwise use regular shorten-term
+    const activeShortenSchedule = $derived(
+      reinvestSavings && scheduleShortenTermReinvest 
+        ? scheduleShortenTermReinvest 
+        : scheduleShortenTerm
+    );
 
   // Validation
   let errors = $state<Record<string, string>>({});
@@ -378,30 +385,30 @@
      }
    }
 
-   // Pagination derived value
-   const paginatedSchedule = $derived.by(() => {
-     if (!scheduleShortenTerm) {
-       return {
-         rows: [],
-         totalPages: 0,
-         currentPage: 1
-       };
-     }
-     const start = (currentPage - 1) * rowsPerPage;
-     const end = start + rowsPerPage;
-     return {
-       rows: scheduleShortenTerm.rows.slice(start, end),
-       totalPages: Math.ceil(scheduleShortenTerm.rows.length / rowsPerPage),
-       currentPage: currentPage
-     };
-   });
+    // Pagination derived value
+    const paginatedSchedule = $derived.by(() => {
+      if (!activeShortenSchedule) {
+        return {
+          rows: [],
+          totalPages: 0,
+          currentPage: 1
+        };
+      }
+      const start = (currentPage - 1) * rowsPerPage;
+      const end = start + rowsPerPage;
+      return {
+        rows: activeShortenSchedule.rows.slice(start, end),
+        totalPages: Math.ceil(activeShortenSchedule.rows.length / rowsPerPage),
+        currentPage: currentPage
+      };
+    });
 
-   // Reset page when schedule changes
-   $effect(() => {
-     if (scheduleShortenTerm && scheduleShortenTerm.rows.length > 0) {
-       currentPage = 1;
-     }
-   });
+    // Reset page when schedule changes
+    $effect(() => {
+      if (activeShortenSchedule && activeShortenSchedule.rows.length > 0) {
+        currentPage = 1;
+      }
+    });
 
   const loanTypeOptions = [
     { value: 'annuity', label: 'Raty równe' },
@@ -675,7 +682,7 @@
     {/if}
 
     <!-- Results -->
-    {#if hasCalculated && scheduleNone && scheduleShortenTerm && scheduleReducePayment}
+    {#if hasCalculated && scheduleNone && scheduleShortenTerm && scheduleReducePayment && activeShortenSchedule}
       <SectionDivider variant="ornate" />
 
       <section class="calculator__results">
@@ -696,17 +703,17 @@
           </div>
 
           <div class="calculator__summary-card calculator__summary-card--shorten">
-            <h3>Skróć okres</h3>
-            <dl>
-              <dt>Okres spłaty</dt>
-              <dd>{Math.ceil(scheduleShortenTerm.summary.totalMonths / 12)} lat ({scheduleShortenTerm.summary.totalMonths} mies.)</dd>
-              <dt>Suma odsetek</dt>
-              <dd>{formatCurrency(scheduleShortenTerm.summary.totalInterest)} zł</dd>
-              <dt>Oszczędność</dt>
-              <dd class="calculator__savings">
-                {formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTerm.summary.totalInterest))} zł
-              </dd>
-            </dl>
+             <h3>Skróć okres</h3>
+             <dl>
+               <dt>Okres spłaty</dt>
+               <dd>{Math.ceil(activeShortenSchedule.summary.totalMonths / 12)} lat ({activeShortenSchedule.summary.totalMonths} mies.)</dd>
+               <dt>Suma odsetek</dt>
+               <dd>{formatCurrency(activeShortenSchedule.summary.totalInterest)} zł</dd>
+               <dt>Oszczędność</dt>
+               <dd class="calculator__savings">
+                 {formatCurrency(scheduleNone.summary.totalInterest.minus(activeShortenSchedule.summary.totalInterest))} zł
+               </dd>
+             </dl>
           </div>
 
            <div class="calculator__summary-card calculator__summary-card--reduce">
@@ -804,13 +811,13 @@
               {scheduleShortenTerm}
               {scheduleReducePayment}
             />
-          {:else if activeTab === 'balance'}
-            <BalanceChart schedule={scheduleShortenTerm} title="Spadek salda - strategia skrócenia okresu" />
-          {:else if activeTab === 'savings'}
-            <SavingsChart
-              scheduleWithOverpayment={scheduleShortenTerm}
-              scheduleWithoutOverpayment={scheduleNone}
-            />
+           {:else if activeTab === 'balance'}
+             <BalanceChart schedule={activeShortenSchedule} title="Spadek salda - strategia skrócenia okresu" />
+           {:else if activeTab === 'savings'}
+             <SavingsChart
+               scheduleWithOverpayment={activeShortenSchedule}
+               scheduleWithoutOverpayment={scheduleNone}
+             />
           {:else if activeTab === 'schedule'}
             <VintageCard title="Harmonogram spłat (skrócenie okresu)">
                <div class="calculator__schedule-table-wrapper">
