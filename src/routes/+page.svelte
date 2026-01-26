@@ -5,6 +5,12 @@
   import { BalanceChart, SavingsChart, ScenarioComparison } from '$lib/components/charts';
   import { generateAmortizationSchedule, calculateAnnuityPayment } from '$lib/engine/mortgage';
   import { calculateGoldenMean } from '$lib/engine/golden-mean';
+  import { 
+    generateScheduleForRate as generateScheduleForRateFromModule,
+    pray as prayFromModule,
+    sin as sinFromModule,
+    type RateSimulationInput 
+  } from '$lib/engine/rate-simulation';
   import type { Loan, Overpayments, Schedule, ScheduleRow, Strategy } from '$lib/engine/types';
   import type { GoldenMeanInput, GoldenMeanOutput } from '$lib/engine/golden-mean';
 
@@ -201,66 +207,52 @@
        }
      }
 
-     function generateScheduleForRate(newRate: number): Schedule {
+     function buildRateSimulationInput(): RateSimulationInput {
        const m = durationMode === 'years' ? Math.round(parseFloat(years) * 12) : Math.round(parseFloat(months));
+       const originalPayment = scheduleNone?.rows[0]?.payment || new Decimal(0);
        
-       const loan: Loan = {
+       return {
          principal: new Decimal(principal),
-         annualRate: new Decimal(newRate).dividedBy(100),
+         currentRate: parseFloat(rate),
          months: m,
-         type: loanType
+         loanType: loanType,
+         monthlyOverpayment: new Decimal(monthlyOverpayment || '0'),
+         yearlyOverpayment: new Decimal(yearlyOverpayment || '0'),
+         yearlyMonth: parseInt(yearlyMonth) || 12,
+         strategy: prayerStrategy,
+         originalMonthlyPayment: originalPayment,
+         annualRaisePercent: parseFloat(annualRaisePercent) || 0
        };
-
-       const overpayments: Overpayments = {
-         monthly: new Decimal(monthlyOverpayment || '0'),
-         yearly: new Decimal(yearlyOverpayment || '0'),
-         yearlyMonth: parseInt(yearlyMonth) || 12
-       };
-
-       if (prayerStrategy === 'reduce-plus') {
-         // For reduce-plus, we need to generate all schedules and use reinvestment logic
-         const noOverpayments: Overpayments = { monthly: new Decimal(0), yearly: new Decimal(0), yearlyMonth: 12 };
-         const newScheduleNone = generateAmortizationSchedule(loan, noOverpayments, 'none');
-         const newScheduleShortenTerm = generateAmortizationSchedule(loan, overpayments, 'shorten-term');
-         return calculateShortenTermReinvest(loan, newScheduleShortenTerm, overpayments, newScheduleNone);
-       }
-       
-       const strategyMap = { 'none': 'none', 'reduce': 'reduce-payment', 'shorten': 'shorten-term' } as const;
-       return generateAmortizationSchedule(loan, overpayments, strategyMap[prayerStrategy] as Strategy);
      }
 
      function pray(level: 1 | 2 | 3) {
-       const currentRate = parseFloat(rate);
-       const newRate = Math.max(0.1, currentRate - level);
-       
-       const schedule = generateScheduleForRate(newRate);
-       const originalSchedule = getScheduleForStrategy(prayerStrategy);
+       const input = buildRateSimulationInput();
+       const result = prayFromModule(input, level);
+       const newRate = Math.max(0.1, input.currentRate - level);
        
        prayerResult = {
          type: 'prayer',
          level,
-         schedule,
-         originalInterest: originalSchedule?.summary.totalInterest || new Decimal(0),
-         newInterest: schedule.summary.totalInterest,
-         difference: (originalSchedule?.summary.totalInterest || new Decimal(0)).minus(schedule.summary.totalInterest),
+         schedule: result.newResult.schedule,
+         originalInterest: result.originalResult.totalInterest,
+         newInterest: result.newResult.totalInterest,
+         difference: result.interestDifference,
          newRate
        };
      }
 
      function sin(level: 1 | 2 | 3) {
-       const currentRate = parseFloat(rate);
-       const newRate = currentRate + level;
-       
-       const schedule = generateScheduleForRate(newRate);
-       const originalSchedule = getScheduleForStrategy(prayerStrategy);
+       const input = buildRateSimulationInput();
+       const result = sinFromModule(input, level);
+       const newRate = input.currentRate + level;
        
        prayerResult = {
          type: 'sin',
          level,
-         schedule,
-         originalInterest: originalSchedule?.summary.totalInterest || new Decimal(0),
-         newInterest: schedule.summary.totalInterest,
-         difference: schedule.summary.totalInterest.minus(originalSchedule?.summary.totalInterest || new Decimal(0)),
+         schedule: result.newResult.schedule,
+         originalInterest: result.originalResult.totalInterest,
+         newInterest: result.newResult.totalInterest,
+         difference: result.interestDifference.abs(),
          newRate
        };
      }
