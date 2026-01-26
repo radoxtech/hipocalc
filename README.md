@@ -10,9 +10,10 @@ Nowoczesny kalkulator nadpłat kredytu hipotecznego z unikalnym algorytmem "Zło
 
 ### 📊 Symulacja Nadpłat
 - **Dwa typy rat**: Równe (annuity) i Malejące (decreasing)
-- **Trzy strategie**: Bez nadpłat / Skróć okres / Zmniejsz ratę
+- **Cztery strategie**: Bez nadpłat / Zmniejsz ratę / Zmniejsz ratę+ / Skróć okres
 - **Nadpłaty**: Miesięczne i roczne
 - **Porównanie**: Wizualizacja oszczędności między scenariuszami
+- **Tabela wyników**: Okres spłaty, rok końca, suma odsetek, oszczędność
 
 ### 🎯 Algorytm "Złoty Środek"
 Automatycznie wylicza optymalną nadpłatę uwzględniając:
@@ -25,14 +26,15 @@ Automatycznie wylicza optymalną nadpłatę uwzględniając:
 ### 📈 Wizualizacje
 - **Wykres salda**: Spadek zadłużenia w czasie
 - **Wykres oszczędności**: Kumulatywne oszczędności na odsetkach
-- **Porównanie scenariuszy**: 3 linie (bez nadpłaty / skróć / zmniejsz)
-- **Harmonogram**: Pełna tabela spłat (wszystkie miesiące)
+- **Porównanie scenariuszy**: 4 linie (bez nadpłaty / zmniejsz ratę / zmniejsz ratę+ / skróć okres)
+- **Harmonogram**: Pełna tabela spłat z datami, wybór strategii do podglądu
 
 ### 💾 Inne
 - **localStorage**: Automatyczne zapisywanie inputów
-- **Tryb ciemny**: Automatyczne wykrywanie preferencji systemowych
+- **Tryb ciemny**: Automatyczne wykrywanie preferencji systemowych + przełącznik
 - **Responsywność**: Działa na desktop i mobile
 - **Dostępność**: WCAG-compliant
+- **Wersjonowanie**: Dynamiczna wersja z release tag
 
 ## 🚀 Technologie
 
@@ -56,12 +58,12 @@ R = K × (r / (1 - (1 + r)^(-n)))
 R_n = K/n + S_n × r
 ```
 
-### Strategia "Zmniejsz ratę" (reduce-payment)
+### Strategia "Zmniejsz ratę+" (reduce-payment-plus) ⭐ Rekomendowana
 **Unikalna implementacja**: Utrzymuje stałą całkowitą wpłatę miesięczną
 - Przykład: 5000 zł rata + 4000 zł nadpłata = **9000 zł fixed total**
 - Miesiąc 1: payment=5000, overpayment=4000, total=9000 ✓
 - Miesiąc 20: payment=2000, **overpayment=7000**, total=9000 ✓
-- Efekt: Szybsza spłata mimo "zmniejszenia raty"
+- Efekt: Spłacasz kredyt tak szybko jak przy "Skróć okres", ale masz niższą ratę obowiązkową w razie utraty dochodu!
 
 ## 🛠️ Rozwój Lokalny
 
