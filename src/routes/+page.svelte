@@ -21,9 +21,21 @@
   let monthlyOverpayment = $state('500');
   let yearlyOverpayment = $state('0');
   let yearlyMonth = $state('12');
+  let durationMode = $state<'years' | 'months'>('years');
 
   // Theme state
   let theme = $state<'light' | 'dark' | 'auto'>('auto');
+
+   // Duration mode helpers
+   const durationValue = $derived(durationMode === 'years' ? years : months);
+   
+   function handleDurationInput(value: string) {
+     if (durationMode === 'years') {
+       years = value;
+     } else {
+       months = value;
+     }
+   }
 
    // Złoty Środek state
    let showGoldenMean = $state(false);
@@ -39,29 +51,30 @@
     // Reinvest savings toggle (shorten-term strategy enhancement)
     let reinvestSavings = $state(false);
 
-   // Load saved form data on mount (browser only)
-   if (browser) {
-       try {
-         const saved = localStorage.getItem(STORAGE_KEY);
-         if (saved) {
-           const data = JSON.parse(saved);
-           principal = data.principal ?? principal;
-           years = data.years ?? years;
-           months = data.months ?? months;
-           rate = data.rate ?? rate;
-           loanType = data.loanType ?? loanType;
-           monthlyOverpayment = data.monthlyOverpayment ?? monthlyOverpayment;
-           yearlyOverpayment = data.yearlyOverpayment ?? yearlyOverpayment;
-           yearlyMonth = data.yearlyMonth ?? yearlyMonth;
-           netIncome = data.netIncome ?? netIncome;
-           fixedExpenses = data.fixedExpenses ?? fixedExpenses;
-           emergencyStatus = data.emergencyStatus ?? emergencyStatus;
-           emergencyFundMonths = data.emergencyFundMonths ?? emergencyFundMonths;
-           reinvestSavings = data.reinvestSavings ?? reinvestSavings;
-         }
-       } catch {
-         // Ignore storage errors
-       }
+    // Load saved form data on mount (browser only)
+    if (browser) {
+        try {
+          const saved = localStorage.getItem(STORAGE_KEY);
+          if (saved) {
+            const data = JSON.parse(saved);
+            principal = data.principal ?? principal;
+            years = data.years ?? years;
+            months = data.months ?? months;
+            rate = data.rate ?? rate;
+            loanType = data.loanType ?? loanType;
+            monthlyOverpayment = data.monthlyOverpayment ?? monthlyOverpayment;
+            yearlyOverpayment = data.yearlyOverpayment ?? yearlyOverpayment;
+            yearlyMonth = data.yearlyMonth ?? yearlyMonth;
+            netIncome = data.netIncome ?? netIncome;
+            fixedExpenses = data.fixedExpenses ?? fixedExpenses;
+            emergencyStatus = data.emergencyStatus ?? emergencyStatus;
+            emergencyFundMonths = data.emergencyFundMonths ?? emergencyFundMonths;
+            reinvestSavings = data.reinvestSavings ?? reinvestSavings;
+            durationMode = data.durationMode ?? durationMode;
+          }
+        } catch {
+          // Ignore storage errors
+        }
 
      // Load theme preference
      try {
@@ -95,30 +108,31 @@
      }
    });
 
-    // Save form data to localStorage whenever values change
-     function saveFormData() {
-       if (!browser) return;
-       try {
-         const data = {
-           principal,
-           years,
-           months,
-           rate,
-           loanType,
-           monthlyOverpayment,
-           yearlyOverpayment,
-           yearlyMonth,
-           netIncome,
-           fixedExpenses,
-           emergencyStatus,
-           emergencyFundMonths,
-           reinvestSavings
-         };
-         localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-       } catch {
-         // Ignore storage errors
-       }
-     }
+     // Save form data to localStorage whenever values change
+      function saveFormData() {
+        if (!browser) return;
+        try {
+          const data = {
+            principal,
+            years,
+            months,
+            rate,
+            loanType,
+            monthlyOverpayment,
+            yearlyOverpayment,
+            yearlyMonth,
+            netIncome,
+            fixedExpenses,
+            emergencyStatus,
+            emergencyFundMonths,
+            reinvestSavings,
+            durationMode
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        } catch {
+          // Ignore storage errors
+        }
+      }
 
   // Apply theme to document
   function applyTheme(selectedTheme: 'light' | 'dark' | 'auto') {
@@ -152,14 +166,14 @@
      }
    });
 
-     // Watch all form fields and save when they change
-     $effect(() => {
-       // Access all reactive state to track dependencies
-       principal; years; months; rate; loanType; monthlyOverpayment;
-       yearlyOverpayment; yearlyMonth; netIncome; fixedExpenses; emergencyStatus; emergencyFundMonths;
-       reinvestSavings;
-       saveFormData();
-     });
+      // Watch all form fields and save when they change
+      $effect(() => {
+        // Access all reactive state to track dependencies
+        principal; years; months; rate; loanType; monthlyOverpayment;
+        yearlyOverpayment; yearlyMonth; netIncome; fixedExpenses; emergencyStatus; emergencyFundMonths;
+        reinvestSavings; durationMode;
+        saveFormData();
+      });
   let goldenMeanResult = $state<GoldenMeanOutput | null>(null);
 
    // Results state
@@ -452,53 +466,58 @@
     <VintageCard title="Krok 1: Dane kredytu" variant="highlight">
       <form class="calculator__form" onsubmit={(e) => { e.preventDefault(); calculate(); }}>
         <div class="calculator__form-grid">
-          <VintageInput
-            label="Kwota kredytu"
-            name="principal"
-            type="number"
-            bind:value={principal}
-            suffix="zł"
-            error={errors.principal}
-            required
-            min={1000}
-          />
+           <VintageInput
+             label="Kwota kredytu"
+             name="principal"
+             type="number"
+             bind:value={principal}
+             suffix="zł"
+             error={errors.principal}
+             required
+             min={1000}
+           />
 
-          <VintageInput
-            label="Okres kredytu"
-            name="years"
-            type="number"
-            bind:value={years}
-            suffix="lat"
-            error={errors.years}
-            required
-            min={1}
-            max={50}
-          />
+            <div class="calculator__input-group calculator__input-group--with-toggle">
+              <VintageInput
+                label="Okres kredytu"
+                name="duration"
+                type="number"
+                value={durationValue}
+                oninput={(e) => handleDurationInput((e.currentTarget as HTMLInputElement).value)}
+                hint={durationMode === 'years' ? 'Liczba lat' : 'Liczba miesięcy'}
+                error={errors.months}
+                required
+                min={1}
+                step={1}
+              />
+              <button
+                type="button"
+                class="calculator__duration-toggle"
+                onclick={() => {
+                  if (durationMode === 'years') {
+                    durationMode = 'months';
+                  } else {
+                    durationMode = 'years';
+                  }
+                }}
+                title={`Przełącz na ${durationMode === 'years' ? 'miesiące' : 'lata'}`}
+              >
+                {durationMode === 'years' ? 'lata' : 'miesiące'}
+              </button>
+            </div>
 
-          <VintageInput
-            label="Okres kredytu"
-            name="months"
-            type="number"
-            bind:value={months}
-            suffix="mies."
-            error={errors.months}
-            required
-            min={1}
-            max={600}
-          />
-
-          <VintageInput
-            label="Oprocentowanie roczne"
-            name="rate"
-            type="number"
-            bind:value={rate}
-            suffix="%"
-            error={errors.rate}
-            step={0.01}
-            required
-            min={0}
-            max={30}
-          />
+           <VintageInput
+             label="Oprocentowanie roczne"
+             name="rate"
+             type="number"
+             bind:value={rate}
+             suffix="%"
+             error={errors.rate}
+             step={0.01}
+             required
+             min={0}
+             max={30}
+           />
 
           <VintageSelect
             label="Typ rat"
@@ -940,13 +959,50 @@
     gap: var(--space-md);
   }
 
-  .calculator__form-actions {
-    margin-top: var(--space-lg);
-    display: flex;
-    justify-content: center;
-  }
+   .calculator__form-actions {
+     margin-top: var(--space-lg);
+     display: flex;
+     justify-content: center;
+   }
 
-  /* Golden Mean Banner */
+   /* Duration Input with Toggle */
+   .calculator__input-group--with-toggle {
+     position: relative;
+   }
+
+   .calculator__duration-toggle {
+     position: absolute;
+     top: 28px;
+     right: var(--space-sm);
+     padding: var(--space-xs) var(--space-sm);
+     background: var(--color-gold);
+     color: var(--color-cream);
+     border: 1px solid var(--color-gold-dark);
+     border-radius: var(--radius-sm);
+     font-family: var(--font-body);
+     font-size: var(--text-xs);
+     font-weight: 600;
+     cursor: pointer;
+     transition: all var(--transition-fast);
+     text-transform: lowercase;
+   }
+
+   .calculator__duration-toggle:hover {
+     background: var(--color-gold-dark);
+     transform: translateY(-1px);
+     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+   }
+
+   .calculator__duration-toggle:active {
+     transform: translateY(0);
+   }
+
+   .calculator__duration-toggle:focus {
+     outline: none;
+     box-shadow: var(--focus-ring);
+   }
+
+   /* Golden Mean Banner */
   .calculator__golden-banner {
     display: flex;
     align-items: center;
