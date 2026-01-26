@@ -15,6 +15,7 @@
   // Form state
   let principal = $state('300000');
   let years = $state('30');
+  let months = $state('360');
   let rate = $state('7.5');
   let loanType = $state<'annuity' | 'decreasing'>('annuity');
   let monthlyOverpayment = $state('500');
@@ -32,58 +33,80 @@
 
   // Load saved form data on mount (browser only)
   if (browser) {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const data = JSON.parse(saved);
-        principal = data.principal ?? principal;
-        years = data.years ?? years;
-        rate = data.rate ?? rate;
-        loanType = data.loanType ?? loanType;
-        monthlyOverpayment = data.monthlyOverpayment ?? monthlyOverpayment;
-        yearlyOverpayment = data.yearlyOverpayment ?? yearlyOverpayment;
-        yearlyMonth = data.yearlyMonth ?? yearlyMonth;
-        netIncome = data.netIncome ?? netIncome;
-        fixedExpenses = data.fixedExpenses ?? fixedExpenses;
-        emergencyStatus = data.emergencyStatus ?? emergencyStatus;
-      }
-    } catch {
-      // Ignore storage errors
-    }
+     try {
+       const saved = localStorage.getItem(STORAGE_KEY);
+       if (saved) {
+         const data = JSON.parse(saved);
+         principal = data.principal ?? principal;
+         years = data.years ?? years;
+         months = data.months ?? months;
+         rate = data.rate ?? rate;
+         loanType = data.loanType ?? loanType;
+         monthlyOverpayment = data.monthlyOverpayment ?? monthlyOverpayment;
+         yearlyOverpayment = data.yearlyOverpayment ?? yearlyOverpayment;
+         yearlyMonth = data.yearlyMonth ?? yearlyMonth;
+         netIncome = data.netIncome ?? netIncome;
+         fixedExpenses = data.fixedExpenses ?? fixedExpenses;
+         emergencyStatus = data.emergencyStatus ?? emergencyStatus;
+       }
+     } catch {
+       // Ignore storage errors
+     }
 
-    // Load theme preference
-    try {
-      const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-      if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'auto') {
-        theme = savedTheme;
-      }
-      applyTheme(theme);
-    } catch {
-      // Ignore storage errors
-    }
-  }
+     // Load theme preference
+     try {
+       const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+       if (savedTheme === 'light' || savedTheme === 'dark' || savedTheme === 'auto') {
+         theme = savedTheme;
+       }
+       applyTheme(theme);
+     } catch {
+       // Ignore storage errors
+     }
+   }
 
-  // Save form data to localStorage whenever values change
-  function saveFormData() {
-    if (!browser) return;
-    try {
-      const data = {
-        principal,
-        years,
-        rate,
-        loanType,
-        monthlyOverpayment,
-        yearlyOverpayment,
-        yearlyMonth,
-        netIncome,
-        fixedExpenses,
-        emergencyStatus
-      };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch {
-      // Ignore storage errors
-    }
-  }
+   // Two-way sync: years → months
+   $effect(() => {
+     if (document.activeElement?.getAttribute('name') !== 'months') {
+       const y = parseFloat(years);
+       if (!isNaN(y) && y >= 0) {
+         months = String(Math.round(y * 12));
+       }
+     }
+   });
+
+   // Two-way sync: months → years
+   $effect(() => {
+     if (document.activeElement?.getAttribute('name') !== 'years') {
+       const m = parseFloat(months);
+       if (!isNaN(m) && m > 0) {
+         years = String((m / 12).toFixed(2));
+       }
+     }
+   });
+
+   // Save form data to localStorage whenever values change
+   function saveFormData() {
+     if (!browser) return;
+     try {
+       const data = {
+         principal,
+         years,
+         months,
+         rate,
+         loanType,
+         monthlyOverpayment,
+         yearlyOverpayment,
+         yearlyMonth,
+         netIncome,
+         fixedExpenses,
+         emergencyStatus
+       };
+       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+     } catch {
+       // Ignore storage errors
+     }
+   }
 
   // Apply theme to document
   function applyTheme(selectedTheme: 'light' | 'dark' | 'auto') {
@@ -97,27 +120,33 @@
     }
   }
 
-  // Toggle theme: auto -> light -> dark -> auto
-  function toggleTheme() {
-    const themes: ('light' | 'dark' | 'auto')[] = ['auto', 'light', 'dark'];
-    const currentIndex = themes.indexOf(theme);
-    const nextIndex = (currentIndex + 1) % themes.length;
-    theme = themes[nextIndex];
-    applyTheme(theme);
-    try {
-      localStorage.setItem(THEME_STORAGE_KEY, theme);
-    } catch {
-      // Ignore storage errors
-    }
-  }
+   // Toggle theme: auto -> light -> dark -> auto
+   function toggleTheme() {
+     const themes: ('light' | 'dark' | 'auto')[] = ['auto', 'light', 'dark'];
+     const currentIndex = themes.indexOf(theme);
+     const nextIndex = (currentIndex + 1) % themes.length;
+     theme = themes[nextIndex];
+     try {
+       localStorage.setItem(THEME_STORAGE_KEY, theme);
+     } catch {
+       // Ignore storage errors
+     }
+   }
 
-  // Watch all form fields and save when they change
-  $effect(() => {
-    // Access all reactive state to track dependencies
-    principal; years; rate; loanType; monthlyOverpayment;
-    yearlyOverpayment; yearlyMonth; netIncome; fixedExpenses; emergencyStatus;
-    saveFormData();
-  });
+   // Ensure theme is applied whenever it changes
+   $effect(() => {
+     if (browser) {
+       applyTheme(theme);
+     }
+   });
+
+    // Watch all form fields and save when they change
+    $effect(() => {
+      // Access all reactive state to track dependencies
+      principal; years; months; rate; loanType; monthlyOverpayment;
+      yearlyOverpayment; yearlyMonth; netIncome; fixedExpenses; emergencyStatus;
+      saveFormData();
+    });
   let goldenMeanResult = $state<GoldenMeanOutput | null>(null);
 
   // Results state
@@ -130,54 +159,56 @@
   // Validation
   let errors = $state<Record<string, string>>({});
 
-  function validateInputs(): boolean {
-    errors = {};
+   function validateInputs(): boolean {
+     errors = {};
 
-    const principalNum = parseFloat(principal);
-    if (!principal || isNaN(principalNum) || principalNum <= 0) {
-      errors.principal = 'Wprowadź kwotę kredytu większą od 0';
-    }
+     const principalNum = parseFloat(principal);
+     if (!principal || isNaN(principalNum) || principalNum <= 0) {
+       errors.principal = 'Wprowadź kwotę kredytu większą od 0';
+     }
 
-    const yearsNum = parseFloat(years);
-    if (!years || isNaN(yearsNum) || yearsNum <= 0 || yearsNum > 50) {
-      errors.years = 'Okres musi być między 1 a 50 lat';
-    }
+     const monthsNum = parseFloat(months);
+     if (!months || isNaN(monthsNum) || monthsNum < 1) {
+       errors.months = 'Okres musi wynosić co najmniej 1 miesiąc';
+     } else if (monthsNum > 600) {
+       errors.months = 'Okres nie może być większy niż 600 miesięcy (50 lat)';
+     }
 
-    const rateNum = parseFloat(rate);
-    if (!rate || isNaN(rateNum) || rateNum < 0 || rateNum > 30) {
-      errors.rate = 'Oprocentowanie musi być między 0% a 30%';
-    }
+     const rateNum = parseFloat(rate);
+     if (!rate || isNaN(rateNum) || rateNum < 0 || rateNum > 30) {
+       errors.rate = 'Oprocentowanie musi być między 0% a 30%';
+     }
 
-    return Object.keys(errors).length === 0;
-  }
+     return Object.keys(errors).length === 0;
+   }
 
-  function calculate() {
-    if (!validateInputs()) return;
+   function calculate() {
+     if (!validateInputs()) return;
 
-    const loan: Loan = {
-      principal: new Decimal(principal),
-      annualRate: new Decimal(rate).dividedBy(100),
-      months: Math.round(parseFloat(years) * 12),
-      type: loanType
-    };
+     const loan: Loan = {
+       principal: new Decimal(principal),
+       annualRate: new Decimal(rate).dividedBy(100),
+       months: Math.round(parseFloat(months)),
+       type: loanType
+     };
 
-    const overpayments: Overpayments = {
-      monthly: new Decimal(monthlyOverpayment || '0'),
-      yearly: new Decimal(yearlyOverpayment || '0'),
-      yearlyMonth: parseInt(yearlyMonth) || 12
-    };
+     const overpayments: Overpayments = {
+       monthly: new Decimal(monthlyOverpayment || '0'),
+       yearly: new Decimal(yearlyOverpayment || '0'),
+       yearlyMonth: parseInt(yearlyMonth) || 12
+     };
 
-    const noOverpayments: Overpayments = {
-      monthly: new Decimal(0),
-      yearly: new Decimal(0),
-      yearlyMonth: 12
-    };
+     const noOverpayments: Overpayments = {
+       monthly: new Decimal(0),
+       yearly: new Decimal(0),
+       yearlyMonth: 12
+     };
 
-    scheduleNone = generateAmortizationSchedule(loan, noOverpayments, 'none');
-    scheduleShortenTerm = generateAmortizationSchedule(loan, overpayments, 'shorten-term');
-    scheduleReducePayment = generateAmortizationSchedule(loan, overpayments, 'reduce-payment');
-    hasCalculated = true;
-  }
+     scheduleNone = generateAmortizationSchedule(loan, noOverpayments, 'none');
+     scheduleShortenTerm = generateAmortizationSchedule(loan, overpayments, 'shorten-term');
+     scheduleReducePayment = generateAmortizationSchedule(loan, overpayments, 'reduce-payment');
+     hasCalculated = true;
+   }
 
   function calculateGoldenMeanResult() {
     if (!netIncome || !fixedExpenses) return;
@@ -288,6 +319,18 @@
             required
             min={1}
             max={50}
+          />
+
+          <VintageInput
+            label="Okres kredytu"
+            name="months"
+            type="number"
+            bind:value={months}
+            suffix="mies."
+            error={errors.months}
+            required
+            min={1}
+            max={600}
           />
 
           <VintageInput
