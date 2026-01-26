@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { browser } from '$app/environment';
   import Decimal from 'decimal.js';
   import { VintageCard, VintageInput, VintageButton, VintageSelect, SectionDivider, BankSeal } from '$lib/components';
   import { BalanceChart, SavingsChart, ScenarioComparison } from '$lib/components/charts';
@@ -6,6 +7,9 @@
   import { calculateGoldenMean } from '$lib/engine/golden-mean';
   import type { Loan, Overpayments, Schedule } from '$lib/engine/types';
   import type { GoldenMeanInput, GoldenMeanOutput } from '$lib/engine/golden-mean';
+
+  // Storage key
+  const STORAGE_KEY = 'hipocalc_form_data';
 
   // Form state
   let principal = $state('300000');
@@ -21,6 +25,58 @@
   let netIncome = $state('');
   let fixedExpenses = $state('');
   let emergencyStatus = $state<'have' | 'build-fast' | 'build-slow-3y'>('have');
+
+  // Load saved form data on mount (browser only)
+  if (browser) {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const data = JSON.parse(saved);
+        principal = data.principal ?? principal;
+        years = data.years ?? years;
+        rate = data.rate ?? rate;
+        loanType = data.loanType ?? loanType;
+        monthlyOverpayment = data.monthlyOverpayment ?? monthlyOverpayment;
+        yearlyOverpayment = data.yearlyOverpayment ?? yearlyOverpayment;
+        yearlyMonth = data.yearlyMonth ?? yearlyMonth;
+        netIncome = data.netIncome ?? netIncome;
+        fixedExpenses = data.fixedExpenses ?? fixedExpenses;
+        emergencyStatus = data.emergencyStatus ?? emergencyStatus;
+      }
+    } catch {
+      // Ignore storage errors
+    }
+  }
+
+  // Save form data to localStorage whenever values change
+  function saveFormData() {
+    if (!browser) return;
+    try {
+      const data = {
+        principal,
+        years,
+        rate,
+        loanType,
+        monthlyOverpayment,
+        yearlyOverpayment,
+        yearlyMonth,
+        netIncome,
+        fixedExpenses,
+        emergencyStatus
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch {
+      // Ignore storage errors
+    }
+  }
+
+  // Watch all form fields and save when they change
+  $effect(() => {
+    // Access all reactive state to track dependencies
+    principal; years; rate; loanType; monthlyOverpayment;
+    yearlyOverpayment; yearlyMonth; netIncome; fixedExpenses; emergencyStatus;
+    saveFormData();
+  });
   let goldenMeanResult = $state<GoldenMeanOutput | null>(null);
 
   // Results state
