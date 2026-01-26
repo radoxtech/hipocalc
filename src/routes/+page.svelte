@@ -501,7 +501,7 @@
                     </tr>
                   </thead>
                   <tbody>
-                    {#each scheduleShortenTerm.rows.slice(0, 60) as row}
+                    {#each scheduleShortenTerm.rows as row}
                       <tr>
                         <td>{row.month}</td>
                         <td>{formatCurrency(row.payment)} zł</td>
@@ -511,13 +511,6 @@
                         <td>{formatCurrency(row.balanceAfter)} zł</td>
                       </tr>
                     {/each}
-                    {#if scheduleShortenTerm.rows.length > 60}
-                      <tr>
-                        <td colspan="6" class="calculator__schedule-more">
-                          ... i jeszcze {scheduleShortenTerm.rows.length - 60} wierszy
-                        </td>
-                      </tr>
-                    {/if}
                   </tbody>
                 </table>
               </div>
