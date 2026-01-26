@@ -698,70 +698,65 @@
       <section class="calculator__results">
         <h2>Wyniki symulacji - 4 strategie spłaty</h2>
 
-        <!-- Summary Cards - 4 strategies -->
-        <div class="calculator__summary-cards calculator__summary-cards--four">
-          <!-- Strategy 1: No overpayment -->
-          <div class="calculator__summary-card calculator__summary-card--none">
-            <h3>Bez nadpłat</h3>
-            <p class="calculator__strategy-hint">Spłata podstawowa</p>
-            <dl>
-              <dt>Okres spłaty</dt>
-              <dd>{Math.ceil(scheduleNone.summary.totalMonths / 12)} lat ({scheduleNone.summary.totalMonths} mies.)</dd>
-              <dt>Suma odsetek</dt>
-              <dd>{formatCurrency(scheduleNone.summary.totalInterest)} zł</dd>
-            </dl>
-          </div>
-
-          <!-- Strategy 2: Shorten term -->
-          <div class="calculator__summary-card calculator__summary-card--shorten">
-             <h3>Skróć okres</h3>
-             <p class="calculator__strategy-hint">Szybciej spłać kredyt</p>
-             <dl>
-               <dt>Okres spłaty</dt>
-               <dd>{Math.ceil(scheduleShortenTerm.summary.totalMonths / 12)} lat ({scheduleShortenTerm.summary.totalMonths} mies.)</dd>
-               <dt>Suma odsetek</dt>
-               <dd>{formatCurrency(scheduleShortenTerm.summary.totalInterest)} zł</dd>
-               <dt>Oszczędność</dt>
-               <dd class="calculator__savings">
-                 {formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTerm.summary.totalInterest))} zł
-               </dd>
-             </dl>
-          </div>
-
-           <!-- Strategy 3: Reduce payment -->
-           <div class="calculator__summary-card calculator__summary-card--reduce">
-             <h3>Zmniejsz ratę</h3>
-             <p class="calculator__strategy-hint">Niższe miesięczne obciążenie</p>
-             <dl>
-               <dt>Okres spłaty</dt>
-               <dd>{Math.ceil(scheduleReducePayment.summary.totalMonths / 12)} lat ({scheduleReducePayment.summary.totalMonths} mies.)</dd>
-               <dt>Suma odsetek</dt>
-               <dd>{formatCurrency(scheduleReducePayment.summary.totalInterest)} zł</dd>
-               <dt>Oszczędność</dt>
-               <dd class="calculator__savings">
-                 {formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleReducePayment.summary.totalInterest))} zł
-               </dd>
-             </dl>
-           </div>
-
-           <!-- Strategy 4: Reduce payment plus (reinvest) -->
-           <div class="calculator__summary-card calculator__summary-card--reinvest">
-             <h3>Zmniejsz ratę+</h3>
-             <p class="calculator__strategy-hint" title="Zmniejsza ratę i reinwestuje zaoszczędzoną różnicę">
-               Zmniejsza + reinwestuje 💡
-             </p>
-             <dl>
-               <dt>Okres spłaty</dt>
-               <dd>{Math.ceil(scheduleShortenTermReinvest.summary.totalMonths / 12)} lat ({scheduleShortenTermReinvest.summary.totalMonths} mies.)</dd>
-               <dt>Suma odsetek</dt>
-               <dd>{formatCurrency(scheduleShortenTermReinvest.summary.totalInterest)} zł</dd>
-               <dt>Oszczędność</dt>
-               <dd class="calculator__savings">
-                 {formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTermReinvest.summary.totalInterest))} zł
-               </dd>
-             </dl>
-           </div>
-         </div>
+        <!-- Summary Table - 4 strategies -->
+        <div class="calculator__results-table-wrapper">
+          <table class="calculator__results-table">
+            <thead>
+              <tr>
+                <th>Strategia</th>
+                <th>Okres spłaty</th>
+                <th>Suma odsetek</th>
+                <th>Oszczędność</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="calculator__results-row calculator__results-row--none">
+                <td class="calculator__strategy-name">
+                  <strong>Bez nadpłat</strong>
+                  <span class="calculator__strategy-hint">Spłata podstawowa</span>
+                </td>
+                <td>{Math.ceil(scheduleNone.summary.totalMonths / 12)} lat ({scheduleNone.summary.totalMonths} mies.)</td>
+                <td>{formatCurrency(scheduleNone.summary.totalInterest)} zł</td>
+                <td>—</td>
+              </tr>
+              <tr class="calculator__results-row calculator__results-row--shorten">
+                <td class="calculator__strategy-name">
+                  <strong>Skróć okres</strong>
+                  <span class="calculator__strategy-hint">Szybciej spłać kredyt</span>
+                </td>
+                <td>{Math.ceil(scheduleShortenTerm.summary.totalMonths / 12)} lat ({scheduleShortenTerm.summary.totalMonths} mies.)</td>
+                <td>{formatCurrency(scheduleShortenTerm.summary.totalInterest)} zł</td>
+                <td class="calculator__savings">{formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTerm.summary.totalInterest))} zł</td>
+              </tr>
+              <tr class="calculator__results-row calculator__results-row--reduce">
+                <td class="calculator__strategy-name">
+                  <strong>Zmniejsz ratę</strong>
+                  <span class="calculator__strategy-hint">Niższe miesięczne obciążenie</span>
+                </td>
+                <td>{Math.ceil(scheduleReducePayment.summary.totalMonths / 12)} lat ({scheduleReducePayment.summary.totalMonths} mies.)</td>
+                <td>{formatCurrency(scheduleReducePayment.summary.totalInterest)} zł</td>
+                <td class="calculator__savings">{formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleReducePayment.summary.totalInterest))} zł</td>
+              </tr>
+              <tr class="calculator__results-row calculator__results-row--reinvest">
+                <td class="calculator__strategy-name">
+                  <strong>Zmniejsz ratę+ ⭐</strong>
+                  <span class="calculator__strategy-hint calculator__strategy-hint--recommended" title="Zmniejszasz ratę ale nadpłacasz dalej tę samą kwotę. Efekt: spłacisz kredyt tak samo szybko jak przy skróceniu okresu, ale w razie utraty dochodu masz niższą ratę obowiązkową!">
+                    Rekomendowana strategia 
+                    <span class="calculator__info-icon">ⓘ</span>
+                  </span>
+                </td>
+                <td>{Math.ceil(scheduleShortenTermReinvest.summary.totalMonths / 12)} lat ({scheduleShortenTermReinvest.summary.totalMonths} mies.)</td>
+                <td>{formatCurrency(scheduleShortenTermReinvest.summary.totalInterest)} zł</td>
+                <td class="calculator__savings">{formatCurrency(scheduleNone.summary.totalInterest.minus(scheduleShortenTermReinvest.summary.totalInterest))} zł</td>
+              </tr>
+            </tbody>
+          </table>
+          <p class="calculator__strategy-explanation">
+            💡 <strong>Dlaczego „Zmniejsz ratę+" jest najlepsza?</strong> 
+            Spłacasz kredyt tak samo szybko jak przy „Skróć okres", ale bank obniża Twoją obowiązkową ratę. 
+            W razie utraty pracy lub spadku dochodów masz niższe zobowiązanie – to Twoje zabezpieczenie!
+          </p>
+        </div>
          
          <!-- Tabs -->
         <div class="calculator__tabs" role="tablist">
@@ -1217,84 +1212,97 @@
     margin-bottom: var(--space-lg);
   }
 
-  .calculator__summary-cards {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: var(--space-md);
+  .calculator__results-table-wrapper {
+    overflow-x: auto;
     margin-bottom: var(--space-lg);
   }
 
-  .calculator__summary-cards--four {
-    grid-template-columns: repeat(4, 1fr);
-  }
-
-  @media (max-width: 1400px) {
-    .calculator__summary-cards--four {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-
-  @media (max-width: 768px) {
-    .calculator__summary-cards,
-    .calculator__summary-cards--four {
-      grid-template-columns: 1fr;
-    }
-  }
-
-  .calculator__summary-card {
-    padding: var(--space-lg);
+  .calculator__results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-body);
+    font-size: var(--text-sm);
     background: var(--color-parchment);
     border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+
+  .calculator__results-table th,
+  .calculator__results-table td {
+    padding: var(--space-md);
+    text-align: right;
+    border-bottom: 1px solid var(--color-gold);
+  }
+
+  .calculator__results-table th {
+    background: var(--color-cream);
+    font-family: var(--font-heading);
+    font-weight: 600;
+    color: var(--color-ink);
+  }
+
+  .calculator__results-table th:first-child,
+  .calculator__results-table td:first-child {
+    text-align: left;
+  }
+
+  .calculator__results-row {
     border-left: 4px solid;
   }
 
-  .calculator__summary-card--none {
+  .calculator__results-row--none {
     border-left-color: #6B7280;
   }
 
-  .calculator__summary-card--shorten {
+  .calculator__results-row--shorten {
     border-left-color: var(--color-burgundy);
   }
 
-   .calculator__summary-card--reduce {
-     border-left-color: #1E40AF;
-   }
+  .calculator__results-row--reduce {
+    border-left-color: #1E40AF;
+  }
 
-   .calculator__summary-card--reinvest {
-     border-left-color: #7B2D9E;
-   }
+  .calculator__results-row--reinvest {
+    border-left-color: #7B2D9E;
+  }
+
+  .calculator__strategy-name {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .calculator__strategy-name strong {
+    font-family: var(--font-heading);
+    font-size: var(--text-base);
+  }
 
   .calculator__strategy-hint {
-    font-size: var(--text-sm);
+    font-size: var(--text-xs);
     color: var(--color-ink-light);
-    opacity: 0.9;
-    margin: 0 0 var(--space-sm) 0;
     font-style: italic;
   }
 
-  .calculator__summary-card h3 {
-    font-family: var(--font-heading);
-    font-size: var(--text-lg);
-    margin: 0 0 var(--space-sm) 0;
-  }
-
-  .calculator__summary-card dl {
-    margin: 0;
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: var(--space-xs);
-    font-size: var(--text-sm);
-  }
-
-  .calculator__summary-card dt {
-    color: var(--color-ink-light);
-  }
-
-  .calculator__summary-card dd {
-    margin: 0;
-    text-align: right;
+  .calculator__strategy-hint--recommended {
+    color: var(--color-burgundy);
     font-weight: 500;
-    white-space: nowrap;
+    cursor: help;
+  }
+
+  .calculator__info-icon {
+    font-style: normal;
+    opacity: 0.7;
+  }
+
+  .calculator__strategy-explanation {
+    margin-top: var(--space-md);
+    padding: var(--space-md);
+    background: linear-gradient(135deg, rgba(123, 45, 158, 0.1) 0%, rgba(160, 32, 30, 0.05) 100%);
+    border-left: 4px solid #7B2D9E;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-sm);
+    color: var(--color-ink);
+    line-height: 1.5;
   }
 
    .calculator__savings {

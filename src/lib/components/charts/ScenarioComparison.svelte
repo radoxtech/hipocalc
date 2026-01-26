@@ -55,12 +55,12 @@
       );
       balanceReduce.push(
         i < scheduleReducePayment.rows.length
-          ? scheduleReducePayment.rows[i].balanceAfter.toNumber() + 1 // +1 zł offset for visibility when overlapping
+          ? scheduleReducePayment.rows[i].balanceAfter.toNumber() * 1.001
           : null
       );
       balanceReducePlus.push(
         i < scheduleReducePlus.rows.length
-          ? scheduleReducePlus.rows[i].balanceAfter.toNumber() + 2 // +2 zł offset for visibility when overlapping
+          ? scheduleReducePlus.rows[i].balanceAfter.toNumber() * 1.002
           : null
       );
     }
@@ -99,27 +99,34 @@
         }
       ],
       series: [
-        {},
+        {
+          label: 'Miesiąc',
+          value: (_u: uPlot, v: number) => `Miesiąc ${v}`
+        },
         {
           label: 'Bez nadpłat',
           stroke: '#6B7280',
           width: 2,
-          dash: [5, 5]
+          dash: [5, 5],
+          value: (_u: uPlot, v: number) => v ? `${formatCurrency(v)} zł` : '—'
         },
         {
           label: 'Skróć okres',
           stroke: '#A0201E',
-          width: 3
+          width: 3,
+          value: (_u: uPlot, v: number) => v ? `${formatCurrency(v)} zł` : '—'
         },
         {
           label: 'Zmniejsz ratę',
           stroke: '#1E40AF',
-          width: 3
+          width: 3,
+          value: (_u: uPlot, v: number) => v ? `${formatCurrency(v)} zł` : '—'
         },
         {
-          label: 'Zmniejsz ratę plus',
+          label: 'Zmniejsz ratę+',
           stroke: '#7B2D9E',
-          width: 3
+          width: 3,
+          value: (_u: uPlot, v: number) => v ? `${formatCurrency(v)} zł` : '—'
         }
       ],
       legend: {
