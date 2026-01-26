@@ -148,7 +148,7 @@ npm run test
 
 ## 📝 Licencja
 
-MIT © 2025 RadoxTech
+MIT © 2025 Rado x Tech
 
 ## 🙏 Kredyty
 

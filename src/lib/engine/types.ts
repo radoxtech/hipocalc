@@ -19,6 +19,7 @@ export interface Overpayments {
   monthly: Decimal;             // Stała nadpłata miesięczna (zł)
   yearly: Decimal;              // Nadpłata roczna (zł)
   yearlyMonth: number;          // Który miesiąc roku (1-12, domyślnie 12 = grudzień)
+  annualRaisePercent?: number;  // Roczna podwyżka nadpłaty (0-25%)
 }
 
 /** Strategia nadpłaty */

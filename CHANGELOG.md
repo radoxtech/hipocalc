@@ -56,6 +56,33 @@ Format oparty na [Keep a Changelog](https://keepachangelog.com/pl/1.0.0/).
 
 _Puste - brak zaplanowanych zmian_
 
+## [1.1.0] - 2026-01-26
+
+### Dodane
+- **Suwak podwyżki rocznej (0-25%)** - pozwala symulować zwiększanie nadpłaty co rok wraz z podwyżką w pracy
+- **Czwarta strategia spłaty "Zmniejsz ratę+"** - zmniejsza ratę i reinwestuje zaoszczędzoną różnicę
+
+### Zmienione
+- Refaktoryzacja z 3+checkbox na 4 stałe strategie spłaty:
+  - Bez nadpłat (baseline)
+  - Skróć okres (stała nadpłata, kredyt kończy się szybciej)
+  - Zmniejsz ratę (stała nadpłata, rata maleje, zaoszczędzona różnica do kieszeni)
+  - Zmniejsz ratę+ (jak wyżej + reinwestowanie zaoszczędzonej różnicy)
+- Usunięto checkbox "Reinwestuj zaoszczędzoną różnicę" - zastąpiony osobną strategią
+- Zmieniono tryb ciemny z 3 stanów (light/dark/auto) na 2 stany (light/dark)
+
+### Naprawione
+- Poprawiono kontrast bannera ostrzegawczego w trybie ciemnym
+- Naprawiono obliczenia strategii "Zmniejsz ratę" - teraz poprawnie NIE reinwestuje zaoszczędzonej różnicy
+- Skrócono tytuł "Zmniejsz ratę plus" do "Zmniejsz ratę+" żeby zmieścił się w jednej linii
+- Dodano offset +1/+2 zł dla nakładających się linii na wykresie (widoczność)
+- Naprawiono łamanie tekstu w kartach podsumowania (white-space: nowrap)
+- Poprawiono wyjaśnienia w hintach:
+  - Dodano opis "przyjemności" (jednorazowe wydatki, samochód, podróże)
+  - Wyjaśniono 15%/50% jako procent wolnej puli na nadpłatę
+- Ukryto pole "miesiące poduszki" gdy użytkownik już ma poduszkę bezpieczeństwa
+- Poprawiono tekst stopki: "Zbudowane z pomocą sztucznej inteligencji"
+
 ---
 
 ## Konwencje

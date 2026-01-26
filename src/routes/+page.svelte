@@ -22,6 +22,7 @@
   let yearlyOverpayment = $state('0');
   let yearlyMonth = $state('12');
   let durationMode = $state<'years' | 'months'>('years');
+  let annualRaisePercent = $state('0');
 
   // Theme state
   let theme = $state<'light' | 'dark'>('light');
@@ -67,6 +68,7 @@
             emergencyStatus = data.emergencyStatus ?? emergencyStatus;
             emergencyFundMonths = data.emergencyFundMonths ?? emergencyFundMonths;
             durationMode = data.durationMode ?? durationMode;
+            annualRaisePercent = data.annualRaisePercent ?? annualRaisePercent;
           }
         } catch {
           // Ignore storage errors
@@ -124,7 +126,8 @@
             fixedExpenses,
             emergencyStatus,
             emergencyFundMonths,
-            durationMode
+            durationMode,
+            annualRaisePercent
           };
           localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
         } catch {
@@ -216,9 +219,17 @@
       let totalOverpayments = new Decimal(0);
       let totalPaid = new Decimal(0);
       let month = 0;
+      
+      const annualRaise = baseOverpayments.annualRaisePercent || 0;
+      let currentMonthlyOverpayment = baseOverpayments.monthly;
 
       while (balance.greaterThan(0.01) && month < loan.months * 2) {
         month++;
+        
+        // Apply annual raise at the start of each year
+        if (month > 1 && month % 12 === 1 && annualRaise > 0) {
+          currentMonthlyOverpayment = currentMonthlyOverpayment.times(1 + annualRaise / 100);
+        }
         
         // 1. Calculate interest on current balance
         const interest = balance.times(monthlyRate);
@@ -250,7 +261,7 @@
         balance = balance.minus(principalPart);
 
         // 4. Calculate overpayment with reinvestment
-        let overpayment = baseOverpayments.monthly;
+        let overpayment = currentMonthlyOverpayment;
         
         // Add yearly overpayment if applicable
         if (month % 12 === baseOverpayments.yearlyMonth % 12 || 
@@ -322,7 +333,8 @@
       const overpayments: Overpayments = {
         monthly: new Decimal(monthlyOverpayment || '0'),
         yearly: new Decimal(yearlyOverpayment || '0'),
-        yearlyMonth: parseInt(yearlyMonth) || 12
+        yearlyMonth: parseInt(yearlyMonth) || 12,
+        annualRaisePercent: parseFloat(annualRaisePercent) || 0
       };
 
       const noOverpayments: Overpayments = {
@@ -547,6 +559,21 @@
               bind:value={yearlyMonth}
             />
           {/if}
+          
+          <div class="calculator__slider-field">
+            <label for="annualRaise">Podwyżka roczna nadpłaty: <strong>{annualRaisePercent}%</strong></label>
+            <input 
+              type="range" 
+              id="annualRaise"
+              name="annualRaise"
+              min="0" 
+              max="25" 
+              step="1"
+              bind:value={annualRaisePercent}
+              class="calculator__slider"
+            />
+            <span class="calculator__slider-hint">Zwiększ nadpłatę co rok wraz z podwyżką w pracy</span>
+          </div>
         </div>
 
         <div class="calculator__form-actions">
@@ -972,6 +999,58 @@
     gap: var(--space-md);
   }
 
+     /* Slider field for annual raise */
+   .calculator__slider-field {
+     margin-top: var(--space-md);
+   }
+   
+   .calculator__slider-field label {
+     display: block;
+     font-family: var(--font-heading);
+     font-size: var(--text-sm);
+     color: var(--color-ink);
+     margin-bottom: var(--space-xs);
+   }
+   
+   .calculator__slider {
+     width: 100%;
+     height: 8px;
+     border-radius: 4px;
+     background: var(--color-cream);
+     border: 1px solid var(--color-gold);
+     cursor: pointer;
+     -webkit-appearance: none;
+     appearance: none;
+   }
+   
+   .calculator__slider::-webkit-slider-thumb {
+     -webkit-appearance: none;
+     width: 20px;
+     height: 20px;
+     border-radius: 50%;
+     background: var(--color-burgundy);
+     border: 2px solid var(--color-cream);
+     cursor: pointer;
+     box-shadow: var(--shadow-sm);
+   }
+   
+   .calculator__slider::-moz-range-thumb {
+     width: 20px;
+     height: 20px;
+     border-radius: 50%;
+     background: var(--color-burgundy);
+     border: 2px solid var(--color-cream);
+     cursor: pointer;
+     box-shadow: var(--shadow-sm);
+   }
+   
+   .calculator__slider-hint {
+     display: block;
+     font-size: var(--text-xs);
+     color: var(--color-ink-light);
+     margin-top: var(--space-xs);
+   }
+
    .calculator__form-actions {
      margin-top: var(--space-lg);
      display: flex;
@@ -1215,6 +1294,7 @@
     margin: 0;
     text-align: right;
     font-weight: 500;
+    white-space: nowrap;
   }
 
    .calculator__savings {
