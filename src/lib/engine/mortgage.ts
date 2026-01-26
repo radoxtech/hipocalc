@@ -92,6 +92,16 @@ export function generateAmortizationSchedule(
   // For decreasing with reduce-payment: capital portion will be recalculated
   let currentCapitalPortion = originalCapitalPortion;
 
+  // For reduce-payment strategy: calculate fixed total monthly payment
+  // This is the amount user commits to pay each month (payment + overpayment)
+  let fixedMonthlyPayment: Decimal | null = null;
+  if (strategy === 'reduce-payment') {
+    const initialPayment = loan.type === 'annuity'
+      ? currentAnnuityPayment
+      : originalCapitalPortion.plus(loan.principal.times(monthlyRate));
+    fixedMonthlyPayment = initialPayment.plus(overpayments.monthly);
+  }
+
   let totalInterest = new Decimal(0);
   let totalOverpayments = new Decimal(0);
   let totalPaid = new Decimal(0);
@@ -138,9 +148,32 @@ export function generateAmortizationSchedule(
     // 4. Calculate overpayment for this month
     let overpayment = new Decimal(0);
 
-    if (strategy !== 'none') {
-      // Monthly overpayment
-      overpayment = overpayment.plus(overpayments.monthly);
+    if (strategy === 'reduce-payment' && fixedMonthlyPayment) {
+      // For reduce-payment: overpayment is the difference between fixed total and current payment
+      overpayment = fixedMonthlyPayment.minus(payment);
+      
+      // Add yearly overpayment if applicable (increases fixed payment this month)
+      if (month % 12 === overpayments.yearlyMonth % 12 || 
+          (overpayments.yearlyMonth === 12 && month % 12 === 0)) {
+        overpayment = overpayment.plus(overpayments.yearly);
+      }
+
+      // Ensure overpayment is non-negative
+      if (overpayment.lessThan(0)) {
+        overpayment = new Decimal(0);
+      }
+
+      // Cap overpayment to remaining balance
+      if (overpayment.greaterThan(balance)) {
+        overpayment = balance;
+      }
+
+      // Apply overpayment
+      balance = balance.minus(overpayment);
+      totalOverpayments = totalOverpayments.plus(overpayment);
+    } else if (strategy === 'shorten-term') {
+      // For shorten-term: fixed overpayment amount
+      overpayment = overpayments.monthly;
 
       // Yearly overpayment (if this is the right month)
       if (month % 12 === overpayments.yearlyMonth % 12 || 
@@ -157,9 +190,10 @@ export function generateAmortizationSchedule(
       balance = balance.minus(overpayment);
       totalOverpayments = totalOverpayments.plus(overpayment);
     }
+    // For 'none' strategy: overpayment stays 0
 
     // 5. Recalculate for next payment based on strategy
-    if (strategy === 'reduce-payment' && overpayment.greaterThan(0) && balance.greaterThan(0)) {
+    if (strategy === 'reduce-payment' && balance.greaterThan(0)) {
       if (loan.type === 'annuity') {
         // Recalculate annuity payment with new balance and remaining months
         const newRemainingMonths = loan.months - month;
