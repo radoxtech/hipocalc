@@ -1043,13 +1043,13 @@
      font-size: var(--text-lg);
    }
 
-   .calculator__golden-banner-text small {
-     display: block;
-     font-size: 1.25rem;
-     font-weight: 600;
-     color: var(--color-ink);
-     line-height: 1.4;
-   }
+    .calculator__golden-banner-text small {
+      display: block;
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--color-ink);
+      line-height: 1.4;
+    }
 
   .calculator__golden-banner-arrow {
     font-size: var(--text-2xl);
