@@ -5,7 +5,7 @@
   import { BalanceChart, SavingsChart, ScenarioComparison } from '$lib/components/charts';
   import { generateAmortizationSchedule, calculateAnnuityPayment } from '$lib/engine/mortgage';
   import { calculateGoldenMean } from '$lib/engine/golden-mean';
-  import type { Loan, Overpayments, Schedule, ScheduleRow } from '$lib/engine/types';
+  import type { Loan, Overpayments, Schedule, ScheduleRow, Strategy } from '$lib/engine/types';
   import type { GoldenMeanInput, GoldenMeanOutput } from '$lib/engine/golden-mean';
 
   // Storage keys
@@ -179,6 +179,8 @@
      let selectedScheduleStrategy = $state<'none' | 'reduce' | 'reduce-plus' | 'shorten'>('reduce-plus');
 
      // Modlitwa o Spadek Stóp state
+     let showPrayerSection = $state(false);
+     let prayerStrategy = $state<'none' | 'reduce' | 'reduce-plus' | 'shorten'>('reduce-plus');
      let prayerResult = $state<{
        type: 'prayer' | 'sin';
        level: 1 | 2 | 3;
@@ -186,7 +188,18 @@
        originalInterest: Decimal;
        newInterest: Decimal;
        difference: Decimal;
+       newRate: number;
      } | null>(null);
+
+     function getScheduleForStrategy(strategy: 'none' | 'reduce' | 'reduce-plus' | 'shorten'): Schedule | null {
+       switch (strategy) {
+         case 'none': return scheduleNone;
+         case 'reduce': return scheduleReducePayment;
+         case 'reduce-plus': return scheduleShortenTermReinvest;
+         case 'shorten': return scheduleShortenTerm;
+         default: return scheduleShortenTermReinvest;
+       }
+     }
 
      function pray(level: 1 | 2 | 3) {
        const currentRate = parseFloat(rate);
@@ -206,9 +219,10 @@
          yearlyMonth: parseInt(yearlyMonth) || 12
        };
        
-       const schedule = generateAmortizationSchedule(loan, overpayments, 'reduce-payment');
+       const strategyMap = { 'none': 'none', 'reduce': 'reduce-payment', 'reduce-plus': 'reduce-payment', 'shorten': 'shorten-term' } as const;
+       const schedule = generateAmortizationSchedule(loan, overpayments, strategyMap[prayerStrategy] as Strategy);
        
-       const originalSchedule = scheduleShortenTermReinvest || scheduleNone;
+       const originalSchedule = getScheduleForStrategy(prayerStrategy);
        
        prayerResult = {
          type: 'prayer',
@@ -216,7 +230,8 @@
          schedule,
          originalInterest: originalSchedule?.summary.totalInterest || new Decimal(0),
          newInterest: schedule.summary.totalInterest,
-         difference: (originalSchedule?.summary.totalInterest || new Decimal(0)).minus(schedule.summary.totalInterest)
+         difference: (originalSchedule?.summary.totalInterest || new Decimal(0)).minus(schedule.summary.totalInterest),
+         newRate
        };
      }
 
@@ -238,9 +253,10 @@
          yearlyMonth: parseInt(yearlyMonth) || 12
        };
        
-       const schedule = generateAmortizationSchedule(loan, overpayments, 'reduce-payment');
+       const strategyMap = { 'none': 'none', 'reduce': 'reduce-payment', 'reduce-plus': 'reduce-payment', 'shorten': 'shorten-term' } as const;
+       const schedule = generateAmortizationSchedule(loan, overpayments, strategyMap[prayerStrategy] as Strategy);
        
-       const originalSchedule = scheduleShortenTermReinvest || scheduleNone;
+       const originalSchedule = getScheduleForStrategy(prayerStrategy);
        
        prayerResult = {
          type: 'sin',
@@ -248,7 +264,8 @@
          schedule,
          originalInterest: originalSchedule?.summary.totalInterest || new Decimal(0),
          newInterest: schedule.summary.totalInterest,
-         difference: schedule.summary.totalInterest.minus(originalSchedule?.summary.totalInterest || new Decimal(0))
+         difference: schedule.summary.totalInterest.minus(originalSchedule?.summary.totalInterest || new Decimal(0)),
+         newRate
        };
      }
 
@@ -1022,63 +1039,80 @@
       </section>
     {/if}
 
-    <!-- Modlitwa o Spadek Stóp -->
-    {#if hasCalculated}
+    <!-- Modlitwa o Spadek Stóp - Banner -->
+    {#if hasCalculated && !showPrayerSection}
+      <button 
+        class="calculator__prayer-banner"
+        onclick={() => showPrayerSection = true}
+      >
+        <span class="calculator__prayer-banner-icon">🙏</span>
+        <span class="calculator__prayer-banner-text">
+          <strong>Modlitwa o Spadek Stóp</strong>
+          <br />
+          <small>Sprawdź jak zmiana oprocentowania wpłynie na Twój kredyt</small>
+        </span>
+        <span class="calculator__prayer-banner-arrow">&#x2192;</span>
+      </button>
+    {/if}
+
+    <!-- Modlitwa o Spadek Stóp - Expanded Section -->
+    {#if hasCalculated && showPrayerSection}
       <SectionDivider variant="ornate" />
       
       <section class="calculator__prayer">
-        <VintageCard title="Modlitwa o Spadek Stóp" variant="default">
+        <VintageCard title="🙏 Modlitwa o Spadek Stóp" variant="default">
           <p class="calculator__prayer-intro">
-            Sprawdź jak zmiana stóp procentowych wpłynie na Twój kredyt. Obecne oprocentowanie: <strong>{rate}%</strong>
+            Obecne oprocentowanie: <strong>{rate}%</strong>. Wybierz strategię i sprawdź wpływ zmiany stóp.
           </p>
 
+          <div class="calculator__prayer-strategy">
+            <label class="calculator__prayer-strategy-label">Strategia spłaty:</label>
+            <div class="calculator__prayer-strategy-buttons">
+              <button 
+                class="calculator__prayer-strategy-btn"
+                class:active={prayerStrategy === 'none'}
+                onclick={() => { prayerStrategy = 'none'; prayerResult = null; }}
+              >Bez nadpłat</button>
+              <button 
+                class="calculator__prayer-strategy-btn"
+                class:active={prayerStrategy === 'reduce'}
+                onclick={() => { prayerStrategy = 'reduce'; prayerResult = null; }}
+              >Zmniejsz ratę</button>
+              <button 
+                class="calculator__prayer-strategy-btn"
+                class:active={prayerStrategy === 'reduce-plus'}
+                onclick={() => { prayerStrategy = 'reduce-plus'; prayerResult = null; }}
+              >Zmniejsz ratę+ ⭐</button>
+              <button 
+                class="calculator__prayer-strategy-btn"
+                class:active={prayerStrategy === 'shorten'}
+                onclick={() => { prayerStrategy = 'shorten'; prayerResult = null; }}
+              >Skróć okres</button>
+            </div>
+          </div>
+
           <div class="calculator__prayer-buttons">
-            <p class="calculator__prayer-label">🙏 Pomodl się o spadek stóp:</p>
+            <p class="calculator__prayer-label">🙏 Wybierz moc modlitwy:</p>
             <div class="calculator__prayer-group">
               <button class="calculator__prayer-btn calculator__prayer-btn--prayer" onclick={() => pray(1)}>
-                Modlitwa Grzesznika<br/><small>-1% ({Math.max(0.1, parseFloat(rate) - 1).toFixed(1)}%)</small>
+                Modlitwa Grzesznika<br/><small>-1% → {Math.max(0.1, parseFloat(rate) - 1).toFixed(1)}%</small>
               </button>
               <button class="calculator__prayer-btn calculator__prayer-btn--prayer" onclick={() => pray(2)}>
-                Modlitwa Wiernego<br/><small>-2% ({Math.max(0.1, parseFloat(rate) - 2).toFixed(1)}%)</small>
+                Modlitwa Wiernego<br/><small>-2% → {Math.max(0.1, parseFloat(rate) - 2).toFixed(1)}%</small>
               </button>
               <button class="calculator__prayer-btn calculator__prayer-btn--prayer" onclick={() => pray(3)}>
-                Modlitwa Świętego<br/><small>-3% ({Math.max(0.1, parseFloat(rate) - 3).toFixed(1)}%)</small>
+                Modlitwa Świętego<br/><small>-3% → {Math.max(0.1, parseFloat(rate) - 3).toFixed(1)}%</small>
               </button>
             </div>
           </div>
 
-          <div class="calculator__prayer-buttons">
-            <p class="calculator__prayer-label">😈 Sprawdź co będzie gdy będziesz grzeszyć za bardzo i modlitwy nie zostaną wysłuchane:</p>
-            <div class="calculator__prayer-group">
-              <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(1)}>
-                Grzesznik<br/><small>+1% ({(parseFloat(rate) + 1).toFixed(1)}%)</small>
-              </button>
-              <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(2)}>
-                Grzesznik+<br/><small>+2% ({(parseFloat(rate) + 2).toFixed(1)}%)</small>
-              </button>
-              <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(3)}>
-                Grzesznik Premium<br/><small>+3% ({(parseFloat(rate) + 3).toFixed(1)}%)</small>
-              </button>
-            </div>
-          </div>
-
-          {#if prayerResult}
-            <div class="calculator__prayer-result calculator__prayer-result--{prayerResult.type}">
-              <h4>
-                {#if prayerResult.type === 'prayer'}
-                  🙏 Wynik modlitwy ({prayerResult.level === 1 ? 'Grzesznika' : prayerResult.level === 2 ? 'Wiernego' : 'Świętego'})
-                {:else}
-                  😈 Skutki grzechu ({prayerResult.level === 1 ? 'Grzesznik' : prayerResult.level === 2 ? 'Grzesznik+' : 'Premium'})
-                {/if}
-              </h4>
+          {#if prayerResult && prayerResult.type === 'prayer'}
+            <div class="calculator__prayer-result calculator__prayer-result--prayer">
+              <h4>🙏 Wynik modlitwy ({prayerResult.level === 1 ? 'Grzesznika' : prayerResult.level === 2 ? 'Wiernego' : 'Świętego'})</h4>
               <div class="calculator__prayer-result-grid">
                 <div class="calculator__prayer-stat">
                   <span class="calculator__prayer-stat-label">Nowe oprocentowanie</span>
-                  <span class="calculator__prayer-stat-value">
-                    {prayerResult.type === 'prayer' 
-                      ? Math.max(0.1, parseFloat(rate) - prayerResult.level).toFixed(1) 
-                      : (parseFloat(rate) + prayerResult.level).toFixed(1)}%
-                  </span>
+                  <span class="calculator__prayer-stat-value">{prayerResult.newRate.toFixed(1)}%</span>
                 </div>
                 <div class="calculator__prayer-stat">
                   <span class="calculator__prayer-stat-label">Suma odsetek</span>
@@ -1087,10 +1121,8 @@
                   </span>
                 </div>
                 <div class="calculator__prayer-stat">
-                  <span class="calculator__prayer-stat-label">
-                    {prayerResult.type === 'prayer' ? 'Oszczędzisz' : 'Stracisz'}
-                  </span>
-                  <span class="calculator__prayer-stat-value calculator__prayer-stat-value--{prayerResult.type}">
+                  <span class="calculator__prayer-stat-label">Oszczędzisz</span>
+                  <span class="calculator__prayer-stat-value calculator__prayer-stat-value--prayer">
                     {prayerResult.difference.toDecimalPlaces(0).toNumber().toLocaleString('pl-PL')} zł
                   </span>
                 </div>
@@ -1100,6 +1132,66 @@
                     {prayerResult.schedule.summary.totalMonths} mies. ({getEndYear(prayerResult.schedule.summary.totalMonths)})
                   </span>
                 </div>
+              </div>
+            </div>
+
+            <div class="calculator__prayer-buttons calculator__prayer-buttons--sin">
+              <p class="calculator__prayer-label">😈 Sprawdź co będzie gdy będziesz za dużo grzeszyć i modlitwy nie zostaną wysłuchane:</p>
+              <div class="calculator__prayer-group">
+                <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(1)}>
+                  Grzesznik<br/><small>+1% → {(parseFloat(rate) + 1).toFixed(1)}%</small>
+                </button>
+                <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(2)}>
+                  Grzesznik+<br/><small>+2% → {(parseFloat(rate) + 2).toFixed(1)}%</small>
+                </button>
+                <button class="calculator__prayer-btn calculator__prayer-btn--sin" onclick={() => sin(3)}>
+                  Grzesznik Premium<br/><small>+3% → {(parseFloat(rate) + 3).toFixed(1)}%</small>
+                </button>
+              </div>
+            </div>
+          {/if}
+
+          {#if prayerResult && prayerResult.type === 'sin'}
+            <div class="calculator__prayer-result calculator__prayer-result--sin">
+              <h4>😈 Skutki grzechu ({prayerResult.level === 1 ? 'Grzesznik' : prayerResult.level === 2 ? 'Grzesznik+' : 'Premium'})</h4>
+              <div class="calculator__prayer-result-grid">
+                <div class="calculator__prayer-stat">
+                  <span class="calculator__prayer-stat-label">Nowe oprocentowanie</span>
+                  <span class="calculator__prayer-stat-value">{prayerResult.newRate.toFixed(1)}%</span>
+                </div>
+                <div class="calculator__prayer-stat">
+                  <span class="calculator__prayer-stat-label">Suma odsetek</span>
+                  <span class="calculator__prayer-stat-value">
+                    {prayerResult.newInterest.toDecimalPlaces(0).toNumber().toLocaleString('pl-PL')} zł
+                  </span>
+                </div>
+                <div class="calculator__prayer-stat">
+                  <span class="calculator__prayer-stat-label">Stracisz</span>
+                  <span class="calculator__prayer-stat-value calculator__prayer-stat-value--sin">
+                    {prayerResult.difference.toDecimalPlaces(0).toNumber().toLocaleString('pl-PL')} zł
+                  </span>
+                </div>
+                <div class="calculator__prayer-stat">
+                  <span class="calculator__prayer-stat-label">Okres spłaty</span>
+                  <span class="calculator__prayer-stat-value">
+                    {prayerResult.schedule.summary.totalMonths} mies. ({getEndYear(prayerResult.schedule.summary.totalMonths)})
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div class="calculator__prayer-buttons">
+              <p class="calculator__prayer-label">🙏 Wróć do modlitwy:</p>
+              <div class="calculator__prayer-group">
+                <button class="calculator__prayer-btn calculator__prayer-btn--prayer" onclick={() => pray(1)}>
+                  Modlitwa Grzesznika<br/><small>-1% → {Math.max(0.1, parseFloat(rate) - 1).toFixed(1)}%</small>
+                </button>
+                <button class="calculator__prayer-btn calculator__prayer-btn--prayer" onclick={() => pray(2)}>
+                  Modlitwa Wiernego<br/><small>-2% → {Math.max(0.1, parseFloat(rate) - 2).toFixed(1)}%</small>
+                </button>
+                <button class="calculator__prayer-btn calculator__prayer-btn--prayer" onclick={() => pray(3)}>
+                  Modlitwa Świętego<br/><small>-3% → {Math.max(0.1, parseFloat(rate) - 3).toFixed(1)}%</small>
+                </button>
               </div>
             </div>
           {/if}
@@ -1808,6 +1900,87 @@
     }
   }
 
+  /* Prayer section - Banner */
+  .calculator__prayer-banner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    width: 100%;
+    padding: var(--space-md) var(--space-lg);
+    margin: var(--space-lg) 0;
+    background: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%);
+    border: 2px solid #3B82F6;
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: left;
+  }
+
+  .calculator__prayer-banner:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.3);
+  }
+
+  .calculator__prayer-banner-icon {
+    font-size: 2.5rem;
+  }
+
+  .calculator__prayer-banner-text {
+    flex: 1;
+  }
+
+  .calculator__prayer-banner-text strong {
+    font-family: var(--font-heading);
+    font-size: var(--text-lg);
+    color: #1E40AF;
+  }
+
+  .calculator__prayer-banner-text small {
+    color: #3B82F6;
+  }
+
+  .calculator__prayer-banner-arrow {
+    font-size: var(--text-2xl);
+    color: #3B82F6;
+  }
+
+  /* Prayer section - Strategy selector */
+  .calculator__prayer-strategy {
+    margin-bottom: var(--space-lg);
+  }
+
+  .calculator__prayer-strategy-label {
+    display: block;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    margin-bottom: var(--space-sm);
+  }
+
+  .calculator__prayer-strategy-buttons {
+    display: flex;
+    gap: var(--space-sm);
+    flex-wrap: wrap;
+  }
+
+  .calculator__prayer-strategy-btn {
+    padding: var(--space-sm) var(--space-md);
+    border: 2px solid var(--color-gold);
+    border-radius: var(--radius-md);
+    background: var(--color-cream);
+    font-family: var(--font-heading);
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .calculator__prayer-strategy-btn:hover {
+    background: var(--color-parchment);
+  }
+
+  .calculator__prayer-strategy-btn.active {
+    background: var(--color-gold);
+    color: white;
+  }
+
   /* Prayer section */
   .calculator__prayer-intro {
     font-family: var(--font-body);
@@ -1925,6 +2098,38 @@
 
   .calculator__prayer-stat-value--sin {
     color: #DC2626;
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-banner {
+    background: linear-gradient(135deg, #1E3A8A 0%, #1E40AF 100%);
+    border-color: #3B82F6;
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-banner-text strong {
+    color: #BFDBFE;
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-banner-text small {
+    color: #93C5FD;
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-banner-arrow {
+    color: #60A5FA;
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-strategy-btn {
+    background: var(--color-ink);
+    border-color: var(--color-gold);
+    color: var(--color-cream);
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-strategy-btn:hover {
+    background: var(--color-ink-light);
+  }
+
+  :global([data-theme="dark"]) .calculator__prayer-strategy-btn.active {
+    background: var(--color-gold);
+    color: var(--color-ink);
   }
 
   :global([data-theme="dark"]) .calculator__prayer-btn--prayer {
