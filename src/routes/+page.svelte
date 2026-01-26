@@ -412,8 +412,8 @@
 
   const emergencyOptions = [
     { value: 'have', label: 'Mam poduszkę' },
-    { value: 'build-fast', label: 'Buduję szybko (50%)' },
-    { value: 'build-slow-3y', label: 'Buduję powoli (15%)' }
+    { value: 'build-fast', label: 'Buduję szybko (50% wolnej puli na nadpłatę)' },
+    { value: 'build-slow-3y', label: 'Buduję powoli (15% wolnej puli na nadpłatę)' }
   ];
 
   const monthOptions = Array.from({ length: 12 }, (_, i) => ({
@@ -608,7 +608,7 @@
             type="number"
             bind:value={fixedExpenses}
             suffix="zł"
-            hint="Bez kredytu i przyjemności"
+            hint="Bez kredytu i przyjemności (przyjemności = dowolne wydatki: jednorazowe zakupy, nowy samochód, podróże)"
             required
             min={0}
           />
@@ -620,15 +620,17 @@
             bind:value={emergencyStatus}
           />
 
-          <VintageInput
-            label="Poduszka bezpieczeństwa (miesiące)"
-            name="emergencyFundMonths"
-            type="number"
-            bind:value={emergencyFundMonths}
-            min={1}
-            max={24}
-            hint="Docelowa poduszka: koszty życia na X miesięcy"
-          />
+          {#if emergencyStatus !== 'have'}
+            <VintageInput
+              label="Poduszka bezpieczeństwa (miesiące)"
+              name="emergencyFundMonths"
+              type="number"
+              bind:value={emergencyFundMonths}
+              min={1}
+              max={24}
+              hint="Docelowa poduszka: koszty życia na X miesięcy"
+            />
+          {/if}
         </div>
 
         <div class="calculator__form-actions">
@@ -884,9 +886,9 @@
       (<a href="https://www.linkedin.com/in/radoslaw-kubiak-71836a1b5/" target="_blank" rel="noopener">LinkedIn</a>)
     </p>
     <p class="calculator__footer-credits">
-      Dumnie stworzone przy pomocy 
+      Zbudowane z pomocą 
       <a href="https://github.com/ohmyopencode/opencode" target="_blank" rel="noopener">Oh My OpenCode</a>
-      i modeli Anthropic Claude Opus 4.5 & Sonnet 4.5
+      i sztucznej inteligencji Anthropic Claude Opus 4.5 & Sonnet 4.5
     </p>
   </footer>
 </div>
