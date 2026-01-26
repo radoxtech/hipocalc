@@ -83,9 +83,25 @@
           fill: 'rgba(46, 125, 50, 0.1)'
         }
       ],
-      cursor: {
-        drag: { x: false, y: false }
-      }
+       cursor: {
+         drag: { x: false, y: false }
+       },
+       hooks: {
+         draw: [
+           (u) => {
+             const ctx = u.ctx;
+             const xScaleEnd = u.valToPos(Math.min(60, months[months.length - 1]), 'x', true);
+             const xScaleStart = u.valToPos(0, 'x', true);
+             const yTop = u.bbox.top;
+             const yBottom = u.bbox.top + u.bbox.height;
+
+             ctx.save();
+             ctx.fillStyle = 'rgba(189, 149, 68, 0.08)';
+             ctx.fillRect(xScaleStart, yTop, xScaleEnd - xScaleStart, yBottom - yTop);
+             ctx.restore();
+           }
+         ]
+       }
     };
 
     chart = new uPlot(opts, data, chartContainer);
@@ -156,8 +172,12 @@
     {/if}
   </div>
 
-  <div bind:this={chartContainer} class="savings-chart__container"></div>
-</div>
+   <div bind:this={chartContainer} class="savings-chart__container"></div>
+
+   <div class="savings-chart__note">
+     💡 <strong>Pierwsze 5 lat (żółte tło):</strong> Okres najwyższych odsetek - nadpłaty w tym czasie przynoszą największe oszczędności
+   </div>
+ </div>
 
 <style>
   .savings-chart {
@@ -202,11 +222,27 @@
     color: var(--color-success);
   }
 
-  .savings-chart__container {
-    width: 100%;
-    background: var(--color-cream);
-    border: 1px solid var(--color-gold);
-    border-radius: var(--radius-md);
-    padding: var(--space-sm);
-  }
-</style>
+   .savings-chart__container {
+     width: 100%;
+     background: var(--color-cream);
+     border: 1px solid var(--color-gold);
+     border-radius: var(--radius-md);
+     padding: var(--space-sm);
+   }
+
+   .savings-chart__note {
+     margin-top: var(--space-sm);
+     padding: var(--space-sm);
+     background: var(--color-parchment);
+     border-left: 3px solid var(--color-gold);
+     font-family: var(--font-body);
+     font-size: var(--text-xs);
+     color: var(--color-ink-light);
+     border-radius: var(--radius-sm);
+   }
+
+   .savings-chart__note strong {
+     color: var(--color-ink);
+     font-weight: 600;
+   }
+ </style>

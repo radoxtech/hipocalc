@@ -23,15 +23,15 @@
 
     const data: uPlot.AlignedData = [months, balances];
 
-    const opts: uPlot.Options = {
-      width: chartContainer.clientWidth,
-      height: 300,
-      title: undefined,
-      scales: {
-        x: { time: false },
-        y: { auto: true }
-      },
-      axes: [
+     const opts: uPlot.Options = {
+       width: chartContainer.clientWidth,
+       height: 300,
+       title: undefined,
+       scales: {
+         x: { time: false },
+         y: { auto: true }
+       },
+       axes: [
         {
           label: 'Miesiąc',
           font: '12px Cormorant, serif',
@@ -57,9 +57,25 @@
           fill: 'rgba(115, 0, 0, 0.1)'
         }
       ],
-      cursor: {
-        drag: { x: false, y: false }
-      }
+       cursor: {
+         drag: { x: false, y: false }
+       },
+       hooks: {
+         draw: [
+           (u) => {
+             const ctx = u.ctx;
+             const xScaleEnd = u.valToPos(Math.min(60, months[months.length - 1]), 'x', true);
+             const xScaleStart = u.valToPos(0, 'x', true);
+             const yTop = u.bbox.top;
+             const yBottom = u.bbox.top + u.bbox.height;
+
+             ctx.save();
+             ctx.fillStyle = 'rgba(189, 149, 68, 0.08)';
+             ctx.fillRect(xScaleStart, yTop, xScaleEnd - xScaleStart, yBottom - yTop);
+             ctx.restore();
+           }
+         ]
+       }
     };
 
     chart = new uPlot(opts, data, chartContainer);
@@ -100,10 +116,14 @@
 </script>
 
 <div class="balance-chart">
-  <h3 class="balance-chart__title">{title}</h3>
-  <div bind:this={chartContainer} class="balance-chart__container"></div>
+   <h3 class="balance-chart__title">{title}</h3>
+   <div bind:this={chartContainer} class="balance-chart__container"></div>
 
-  <!-- Accessible data table -->
+   <div class="balance-chart__note">
+     💡 <strong>Pierwsze 5 lat (żółte tło):</strong> Okres najwyższych odsetek - nadpłaty w tym czasie przynoszą największe oszczędności
+   </div>
+
+   <!-- Accessible data table -->
   <details class="balance-chart__details">
     <summary>Pokaż dane w tabeli</summary>
     <div class="balance-chart__table-wrapper">
@@ -144,15 +164,31 @@
     margin: 0 0 var(--space-md) 0;
   }
 
-  .balance-chart__container {
-    width: 100%;
-    background: var(--color-cream);
-    border: 1px solid var(--color-gold);
-    border-radius: var(--radius-md);
-    padding: var(--space-sm);
-  }
+   .balance-chart__container {
+     width: 100%;
+     background: var(--color-cream);
+     border: 1px solid var(--color-gold);
+     border-radius: var(--radius-md);
+     padding: var(--space-sm);
+   }
 
-  .balance-chart__details {
+   .balance-chart__note {
+     margin-top: var(--space-sm);
+     padding: var(--space-sm);
+     background: var(--color-parchment);
+     border-left: 3px solid var(--color-gold);
+     font-family: var(--font-body);
+     font-size: var(--text-xs);
+     color: var(--color-ink-light);
+     border-radius: var(--radius-sm);
+   }
+
+   .balance-chart__note strong {
+     color: var(--color-ink);
+     font-weight: 600;
+   }
+
+   .balance-chart__details {
     margin-top: var(--space-md);
     font-family: var(--font-body);
   }
