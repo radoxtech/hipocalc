@@ -1,5 +1,11 @@
 import Decimal from 'decimal.js';
 import type { Loan, Overpayments, Strategy, Schedule, ScheduleRow, DecreasingPaymentResult } from './types';
+import {
+  shouldApplyYearlyOverpayment,
+  applyAnnualRaise,
+  calculateMonthlyPayment,
+  recalculatePaymentForReduceStrategy
+} from './schedule-core';
 
 /**
  * Zaokrągla wartość do groszy (2 miejsca po przecinku) używając ROUND_HALF_UP
@@ -110,30 +116,16 @@ export function generateAmortizationSchedule(
     totalInterest = totalInterest.plus(interest);
 
     // 2. Calculate payment based on loan type
-    let payment: Decimal;
-    let principalPart: Decimal;
-
-    if (loan.type === 'annuity') {
-      payment = currentAnnuityPayment;
-      // Principal part = payment - interest
-      principalPart = payment.minus(interest);
-
-      // Handle last payment edge case
-      if (principalPart.greaterThan(balance)) {
-        principalPart = balance;
-        payment = principalPart.plus(interest);
-      }
-    } else {
-      // Decreasing
-      principalPart = currentCapitalPortion;
-
-      // Handle last payment edge case
-      if (principalPart.greaterThan(balance)) {
-        principalPart = balance;
-      }
-
-      payment = principalPart.plus(interest);
-    }
+    const paymentResult = calculateMonthlyPayment(
+      balance,
+      monthlyRate,
+      remainingMonths,
+      loan.type,
+      currentAnnuityPayment,
+      currentCapitalPortion
+    );
+    const payment = paymentResult.payment;
+    let principalPart = paymentResult.principalPart;
 
     // 3. Apply payment to balance
     balance = balance.minus(principalPart);
@@ -142,9 +134,7 @@ export function generateAmortizationSchedule(
     let overpayment = new Decimal(0);
     
     // Apply annual raise at the start of each year (month 13, 25, 37, etc.)
-    if (month > 1 && month % 12 === 1 && annualRaise > 0) {
-      currentMonthlyOverpayment = currentMonthlyOverpayment.times(1 + annualRaise / 100);
-    }
+    currentMonthlyOverpayment = applyAnnualRaise(currentMonthlyOverpayment, month, annualRaise);
 
     if (strategy === 'reduce-payment') {
       // For reduce-payment: use ONLY the fixed overpayment user entered
@@ -152,8 +142,7 @@ export function generateAmortizationSchedule(
       overpayment = currentMonthlyOverpayment;
       
       // Add yearly overpayment if applicable
-      if (month % 12 === overpayments.yearlyMonth % 12 || 
-          (overpayments.yearlyMonth === 12 && month % 12 === 0)) {
+      if (shouldApplyYearlyOverpayment(month, overpayments.yearlyMonth)) {
         overpayment = overpayment.plus(overpayments.yearly);
       }
 
@@ -169,8 +158,7 @@ export function generateAmortizationSchedule(
       overpayment = currentMonthlyOverpayment;
 
       // Yearly overpayment (if this is the right month)
-      if (month % 12 === overpayments.yearlyMonth % 12 || 
-          (overpayments.yearlyMonth === 12 && month % 12 === 0)) {
+      if (shouldApplyYearlyOverpayment(month, overpayments.yearlyMonth)) {
         overpayment = overpayment.plus(overpayments.yearly);
       }
 
@@ -187,17 +175,19 @@ export function generateAmortizationSchedule(
 
     // 5. Recalculate for next payment based on strategy
     if (strategy === 'reduce-payment' && balance.greaterThan(0)) {
-      if (loan.type === 'annuity') {
-        // Recalculate annuity payment with new balance and remaining months
-        const newRemainingMonths = loan.months - month;
-        if (newRemainingMonths > 0) {
-          currentAnnuityPayment = calculateAnnuityPayment(balance, monthlyRate, newRemainingMonths);
-        }
-      } else {
-        // Recalculate capital portion for decreasing loan
-        const newRemainingMonths = loan.months - month;
-        if (newRemainingMonths > 0) {
-          currentCapitalPortion = balance.dividedBy(newRemainingMonths);
+      const newRemainingMonths = loan.months - month;
+      if (newRemainingMonths > 0) {
+        const recalculated = recalculatePaymentForReduceStrategy(
+          balance,
+          monthlyRate,
+          newRemainingMonths,
+          loan.type
+        );
+        
+        if (loan.type === 'annuity') {
+          currentAnnuityPayment = recalculated;
+        } else {
+          currentCapitalPortion = recalculated;
         }
       }
     }
@@ -229,7 +219,8 @@ export function generateAmortizationSchedule(
       totalMonths: rows.length,
       totalPaid,
       totalInterest,
-      totalOverpayments
+      totalOverpayments,
+      initialTotalPayment: rows[0] ? rows[0].payment.plus(rows[0].overpayment) : new Decimal(0)
     }
   };
 }

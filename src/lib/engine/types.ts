@@ -47,6 +47,7 @@ export interface Schedule {
     totalPaid: Decimal;
     totalInterest: Decimal;
     totalOverpayments: Decimal;
+    initialTotalPayment: Decimal;
   };
 }
 
