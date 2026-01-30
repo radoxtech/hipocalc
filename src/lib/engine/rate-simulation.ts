@@ -1,6 +1,12 @@
 import Decimal from 'decimal.js';
 import type { Loan, Overpayments, Schedule, Strategy } from './types';
 import { generateAmortizationSchedule, calculateAnnuityPayment } from './mortgage';
+import {
+  shouldApplyYearlyOverpayment,
+  applyAnnualRaise,
+  calculateMonthlyPayment,
+  recalculatePaymentForReduceStrategy
+} from './schedule-core';
 
 export type SimulationStrategy = 'none' | 'reduce' | 'reduce-plus' | 'shorten';
 
@@ -32,10 +38,16 @@ export interface RateComparisonResult {
   monthsDifference: number;
 }
 
-export function calculateReinvestSchedule(
+/**
+ * Internal unified function for reinvest schedule calculation
+ * Handles both legacy reinvest (with schedule comparison) and fixed budget modes
+ */
+function calculateReinvestScheduleInternal(
   loan: Loan,
   overpayments: Overpayments,
-  scheduleWithoutOverpayment: Schedule
+  scheduleWithoutOverpayment: Schedule,
+  fixedBudget?: Decimal,
+  annualRaisePercent?: number
 ): Schedule {
   const rows: import('./types').ScheduleRow[] = [];
   const monthlyRate = loan.annualRate.dividedBy(12);
@@ -53,50 +65,52 @@ export function calculateReinvestSchedule(
   let totalPaid = new Decimal(0);
   let month = 0;
 
+  let currentBudget = fixedBudget;
+  const hasFixedBudget = !!fixedBudget;
+
   while (balance.greaterThan(0.01) && month < loan.months * 2) {
     month++;
     
-    const interest = balance.times(monthlyRate);
-    totalInterest = totalInterest.plus(interest);
-
-    let payment: Decimal;
-    let principalPart: Decimal;
-
-    if (loan.type === 'annuity') {
-      payment = currentAnnuityPayment;
-      principalPart = payment.minus(interest);
-      
-      if (principalPart.greaterThan(balance)) {
-        principalPart = balance;
-        payment = principalPart.plus(interest);
-      }
-    } else {
-      principalPart = currentCapitalPortion;
-      
-      if (principalPart.greaterThan(balance)) {
-        principalPart = balance;
-      }
-      
-      payment = principalPart.plus(interest);
+    // Apply annual raise if applicable
+    if (currentBudget && annualRaisePercent) {
+      currentBudget = applyAnnualRaise(currentBudget, month, annualRaisePercent);
     }
+    
+    const { payment, principalPart, interest } = calculateMonthlyPayment(
+      balance,
+      monthlyRate,
+      loan.months - month,
+      loan.type,
+      currentAnnuityPayment,
+      currentCapitalPortion
+    );
 
+    totalInterest = totalInterest.plus(interest);
     balance = balance.minus(principalPart);
 
-    let overpayment = overpayments.monthly;
+    let overpayment: Decimal;
     
-    if (month % 12 === overpayments.yearlyMonth % 12 || 
-        (overpayments.yearlyMonth === 12 && month % 12 === 0)) {
-      overpayment = overpayment.plus(overpayments.yearly);
-    }
-
-    // Reinvest: add savings from lower payment vs original schedule
-    if (month <= scheduleWithoutOverpayment.rows.length) {
-      const paymentWithoutOverpayment = scheduleWithoutOverpayment.rows[month - 1]?.payment || new Decimal(0);
-      const savingsThisMonth = paymentWithoutOverpayment.minus(payment);
+    if (hasFixedBudget) {
+      // Fixed budget mode: overpayment = budget - payment
+      overpayment = Decimal.max(new Decimal(0), currentBudget!.minus(payment));
+    } else {
+      // Legacy reinvest mode: start with monthly overpayment + savings
+      overpayment = overpayments.monthly;
       
-      if (savingsThisMonth.greaterThan(0)) {
-        overpayment = overpayment.plus(savingsThisMonth);
+      // Reinvest: add savings from lower payment vs original schedule
+      if (month <= scheduleWithoutOverpayment.rows.length) {
+        const paymentWithoutOverpayment = scheduleWithoutOverpayment.rows[month - 1]?.payment || new Decimal(0);
+        const savingsThisMonth = paymentWithoutOverpayment.minus(payment);
+        
+        if (savingsThisMonth.greaterThan(0)) {
+          overpayment = overpayment.plus(savingsThisMonth);
+        }
       }
+    }
+    
+    // Add yearly overpayment if applicable
+    if (shouldApplyYearlyOverpayment(month, overpayments.yearlyMonth)) {
+      overpayment = overpayment.plus(overpayments.yearly);
     }
 
     if (overpayment.greaterThan(balance)) {
@@ -119,15 +133,14 @@ export function calculateReinvestSchedule(
       balanceAfter: balance
     });
 
-    if (loan.type === 'annuity' && balance.greaterThan(0)) {
+    if (!hasFixedBudget && balance.greaterThan(0)) {
       const remainingMonths = loan.months - month;
       if (remainingMonths > 0) {
-        currentAnnuityPayment = calculateAnnuityPayment(balance, monthlyRate, remainingMonths);
-      }
-    } else if (loan.type === 'decreasing' && balance.greaterThan(0)) {
-      const remainingMonths = loan.months - month;
-      if (remainingMonths > 0) {
-        currentCapitalPortion = balance.dividedBy(remainingMonths);
+        if (loan.type === 'annuity') {
+          currentAnnuityPayment = recalculatePaymentForReduceStrategy(balance, monthlyRate, remainingMonths, 'annuity');
+        } else {
+          currentCapitalPortion = recalculatePaymentForReduceStrategy(balance, monthlyRate, remainingMonths, 'decreasing');
+        }
       }
     }
 
@@ -140,9 +153,18 @@ export function calculateReinvestSchedule(
       totalMonths: month,
       totalPaid,
       totalInterest,
-      totalOverpayments
+      totalOverpayments,
+      initialTotalPayment: rows[0] ? rows[0].payment.plus(rows[0].overpayment) : new Decimal(0)
     }
   };
+}
+
+export function calculateReinvestSchedule(
+  loan: Loan,
+  overpayments: Overpayments,
+  scheduleWithoutOverpayment: Schedule
+): Schedule {
+  return calculateReinvestScheduleInternal(loan, overpayments, scheduleWithoutOverpayment);
 }
 
 function calculateBudgetAdjustedOverpayment(
@@ -203,116 +225,20 @@ export function generateScheduleForRate(
 function calculateBudgetReinvestSchedule(
   loan: Loan,
   overpayments: Overpayments,
-  _scheduleWithoutOverpayment: Schedule,
+  scheduleWithoutOverpayment: Schedule,
   input: RateSimulationInput
 ): Schedule {
-  const rows: import('./types').ScheduleRow[] = [];
-  const monthlyRate = loan.annualRate.dividedBy(12);
-  
-  let balance = loan.principal;
-  let currentAnnuityPayment = loan.type === 'annuity'
-    ? calculateAnnuityPayment(loan.principal, monthlyRate, loan.months)
-    : new Decimal(0);
-  
-  const originalCapitalPortion = loan.principal.dividedBy(loan.months);
-  let currentCapitalPortion = originalCapitalPortion;
-
-  let totalInterest = new Decimal(0);
-  let totalOverpayments = new Decimal(0);
-  let totalPaid = new Decimal(0);
-  let month = 0;
-
-  const annualRaise = input.annualRaisePercent || 0;
-  let currentBudget = input.originalMonthlyPayment
+  const fixedBudget = input.originalMonthlyPayment
     ? input.originalMonthlyPayment.plus(input.monthlyOverpayment)
-    : overpayments.monthly.plus(currentAnnuityPayment);
+    : overpayments.monthly.plus(calculateAnnuityPayment(loan.principal, loan.annualRate.dividedBy(12), loan.months));
   
-  const hasFixedBudget = !!input.originalMonthlyPayment;
-
-  while (balance.greaterThan(0.01) && month < loan.months * 2) {
-    month++;
-    
-    if (month > 1 && month % 12 === 1 && annualRaise > 0) {
-      currentBudget = currentBudget.times(1 + annualRaise / 100);
-    }
-    
-    const interest = balance.times(monthlyRate);
-    totalInterest = totalInterest.plus(interest);
-
-    let payment: Decimal;
-    let principalPart: Decimal;
-
-    if (loan.type === 'annuity') {
-      payment = currentAnnuityPayment;
-      principalPart = payment.minus(interest);
-      
-      if (principalPart.greaterThan(balance)) {
-        principalPart = balance;
-        payment = principalPart.plus(interest);
-      }
-    } else {
-      principalPart = currentCapitalPortion;
-      
-      if (principalPart.greaterThan(balance)) {
-        principalPart = balance;
-      }
-      
-      payment = principalPart.plus(interest);
-    }
-
-    balance = balance.minus(principalPart);
-
-    let overpayment = Decimal.max(new Decimal(0), currentBudget.minus(payment));
-    
-    if (month % 12 === overpayments.yearlyMonth % 12 || 
-        (overpayments.yearlyMonth === 12 && month % 12 === 0)) {
-      overpayment = overpayment.plus(overpayments.yearly);
-    }
-
-    if (overpayment.greaterThan(balance)) {
-      overpayment = balance;
-    }
-
-    balance = balance.minus(overpayment);
-    totalOverpayments = totalOverpayments.plus(overpayment);
-
-    const totalPaidThisMonth = payment.plus(overpayment);
-    totalPaid = totalPaid.plus(totalPaidThisMonth);
-
-    rows.push({
-      month,
-      payment,
-      principal: principalPart,
-      interest,
-      overpayment,
-      totalPaid: totalPaidThisMonth,
-      balanceAfter: balance
-    });
-
-    if (!hasFixedBudget && loan.type === 'annuity' && balance.greaterThan(0)) {
-      const remainingMonths = loan.months - month;
-      if (remainingMonths > 0) {
-        currentAnnuityPayment = calculateAnnuityPayment(balance, monthlyRate, remainingMonths);
-      }
-    } else if (!hasFixedBudget && loan.type === 'decreasing' && balance.greaterThan(0)) {
-      const remainingMonths = loan.months - month;
-      if (remainingMonths > 0) {
-        currentCapitalPortion = balance.dividedBy(remainingMonths);
-      }
-    }
-
-    if (balance.lessThanOrEqualTo(0.01)) break;
-  }
-
-  return {
-    rows,
-    summary: {
-      totalMonths: month,
-      totalPaid,
-      totalInterest,
-      totalOverpayments
-    }
-  };
+  return calculateReinvestScheduleInternal(
+    loan,
+    overpayments,
+    scheduleWithoutOverpayment,
+    fixedBudget,
+    input.annualRaisePercent
+  );
 }
 
 export function simulateRateChange(

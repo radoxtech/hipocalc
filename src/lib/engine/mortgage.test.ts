@@ -395,7 +395,8 @@ describe('calculateTotalInterest', () => {
         totalMonths: 2,
         totalPaid: new Decimal(2000),
         totalInterest: new Decimal(550),
-        totalOverpayments: new Decimal(0)
+        totalOverpayments: new Decimal(0),
+        initialTotalPayment: new Decimal(1000)
       }
     };
 
@@ -413,7 +414,8 @@ describe('calculateSavings', () => {
         totalMonths: 360,
         totalPaid: new Decimal(647500),
         totalInterest: new Decimal(347500),
-        totalOverpayments: new Decimal(0)
+        totalOverpayments: new Decimal(0),
+        initialTotalPayment: new Decimal(0)
       }
     };
 
@@ -423,7 +425,8 @@ describe('calculateSavings', () => {
         totalMonths: 240,
         totalPaid: new Decimal(520000),
         totalInterest: new Decimal(180000),
-        totalOverpayments: new Decimal(40000)
+        totalOverpayments: new Decimal(40000),
+        initialTotalPayment: new Decimal(0)
       }
     };
 

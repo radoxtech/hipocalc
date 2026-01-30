@@ -1,8 +1,10 @@
 {
-  "active_plan": "/Users/rado/repos/hipocalc/.sisyphus/plans/hipocalc.md",
-  "started_at": "2026-01-26T16:43:11.390Z",
+  "active_plan": "/Users/rado/repos/hipocalc/.sisyphus/plans/calculation-refactor.md",
+  "started_at": "2026-01-30T13:19:32.006Z",
+  "completed_at": "2026-01-30T14:42:00.000Z",
   "session_ids": [
-    "ses_404f104e1ffew2V9KnOQJxpzPk"
+    "ses_3f0fc442fffeolIJw4qT9PHZYg"
   ],
-  "plan_name": "hipocalc"
+  "plan_name": "calculation-refactor",
+  "status": "completed"
 }
