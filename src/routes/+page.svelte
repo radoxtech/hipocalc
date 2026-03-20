@@ -4,6 +4,7 @@
   import { VintageCard, VintageInput, VintageButton, VintageSelect, SectionDivider, BankSeal } from '$lib/components';
   import { BalanceChart, SavingsChart, ScenarioComparison } from '$lib/components/charts';
   import { generateAmortizationSchedule, calculateAnnuityPayment } from '$lib/engine/mortgage';
+  import { recalculatePaymentForReduceStrategy } from '$lib/engine/schedule-core';
   import { calculateGoldenMean } from '$lib/engine/golden-mean';
   import { 
     generateScheduleForRate as generateScheduleForRateFromModule,
@@ -384,6 +385,20 @@
         balance = balance.minus(overpayment);
         totalOverpayments = totalOverpayments.plus(overpayment);
 
+        // Recalculate payment for next month (reduce-payment logic)
+        // This is the key: after overpayment, the required payment drops,
+        // so next month savings = originalPayment - reducedPayment increases
+        if (balance.greaterThan(0)) {
+          const remainingMonths = loan.months - month;
+          if (remainingMonths > 0) {
+            if (loan.type === 'annuity') {
+              currentAnnuityPayment = recalculatePaymentForReduceStrategy(balance, monthlyRate, remainingMonths, 'annuity');
+            } else {
+              currentCapitalPortion = recalculatePaymentForReduceStrategy(balance, monthlyRate, remainingMonths, 'decreasing');
+            }
+          }
+        }
+
         // Record row
         const row: ScheduleRow = {
           month,
@@ -410,7 +425,8 @@
           totalMonths: rows.length,
           totalPaid,
           totalInterest,
-          totalOverpayments
+          totalOverpayments,
+          initialTotalPayment: rows[0] ? rows[0].payment.plus(rows[0].overpayment) : new Decimal(0)
         }
       };
     }
