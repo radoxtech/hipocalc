@@ -234,8 +234,8 @@
          loanType: loanType,
          monthlyOverpayment: new Decimal(monthlyOverpayment || '0'),
          yearlyOverpayment: new Decimal(yearlyOverpayment || '0'),
-         yearlyMonth: parseInt(yearlyMonth) || 12,
-         strategy: prayerStrategy,
+          yearlyMonth: calendarToScheduleMonth(parseInt(yearlyMonth) || 12),
+          strategy: prayerStrategy,
          originalMonthlyPayment: originalPayment,
          annualRaisePercent: parseFloat(annualRaisePercent) || 0
        };
@@ -444,7 +444,7 @@
       const overpayments: Overpayments = {
         monthly: new Decimal(monthlyOverpayment || '0'),
         yearly: new Decimal(yearlyOverpayment || '0'),
-        yearlyMonth: parseInt(yearlyMonth) || 12,
+        yearlyMonth: calendarToScheduleMonth(parseInt(yearlyMonth) || 12),
         annualRaisePercent: parseFloat(annualRaisePercent) || 0
       };
 
@@ -563,9 +563,31 @@
    }
 
    function getEndYear(totalMonths: number): number {
-     const date = new Date();
-     date.setMonth(date.getMonth() + totalMonths);
-     return date.getFullYear();
+      const date = new Date();
+      date.setMonth(date.getMonth() + totalMonths);
+      return date.getFullYear();
+    }
+
+   /**
+    * Converts calendar month (1=January, 12=December) to schedule month offset
+    * that the engine expects for yearly overpayment timing.
+    * 
+    * The engine checks `month % 12 === yearlyMonth % 12` where month is the
+    * schedule month (1-indexed from loan start). Since the schedule starts
+    * next month from today, we need to map the user's chosen calendar month
+    * to the correct schedule offset.
+    * 
+    * @example
+    * // Today is March 2026, schedule starts April 2026 (month 1)
+    * // User picks March → should fire at month 12 (March 2027)
+    * calendarToScheduleMonth(3) // returns 12
+    * // User picks May → should fire at month 2 (May 2026)  
+    * calendarToScheduleMonth(5) // returns 2
+    */
+   function calendarToScheduleMonth(calendarMonth: number): number {
+     const startCalendarMonth = ((new Date().getMonth() + 1) % 12) + 1;
+     const offset = ((calendarMonth - startCalendarMonth) % 12 + 12) % 12;
+     return offset === 0 ? 12 : offset;
    }
 
   // Theme icon components (SVG)
