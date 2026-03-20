@@ -586,8 +586,8 @@
     */
    function calendarToScheduleMonth(calendarMonth: number): number {
      const startCalendarMonth = ((new Date().getMonth() + 1) % 12) + 1;
-     const offset = ((calendarMonth - startCalendarMonth) % 12 + 12) % 12;
-     return offset === 0 ? 12 : offset;
+     const diff = calendarMonth - startCalendarMonth;
+     return ((diff % 12) + 12) % 12 + 1;
    }
 
   // Theme icon components (SVG)
